@@ -1,0 +1,58 @@
+{
+  "turn": 51,
+  "units": [
+    {
+      "id": "unit-32095df71ecf",
+      "unit_type": "UNIT_BUILDER",
+      "owner_city_id": "city-7f1b650c",
+      "x": 67,
+      "y": 28,
+      "moves_remaining": 2,
+      "charges_remaining": 1,
+      "created_turn": 17
+    },
+    {
+      "id": "unit-66114f1d481f",
+      "unit_type": "UNIT_BUILDER",
+      "owner_city_id": "city-7f1b650c",
+      "x": 66,
+      "y": 27,
+      "moves_remaining": 2,
+      "charges_remaining": 3,
+      "created_turn": 32
+    },
+    {
+      "id": "unit-240788df8c28",
+      "unit_type": "UNIT_SETTLER",
+      "owner_city_id": "city-7f1b650c",
+      "x": 66,
+      "y": 27,
+      "moves_remaining": 2,
+      "charges_remaining": 0,
+      "created_turn": 41
+    }
+  ],
+  "research": {
+    "technology": {
+      "current_id": null,
+      "progress": {
+        "TECH_ANIMAL_HUSBANDRY": 25.0,
+        "TECH_MINING": 25.0
+      }
+    },
+    "civic": {
+      "current_id": "CIVIC_CRAFTSMANSHIP",
+      "progress": {
+        "CIVIC_CODE_OF_LAWS": 20.0,
+        "CIVIC_CRAFTSMANSHIP": 16.200000000000003
+      }
+    }
+  },
+  "technologies": [
+    "TECH_ANIMAL_HUSBANDRY",
+    "TECH_MINING"
+  ],
+  "civics": [
+    "CIVIC_CODE_OF_LAWS"
+  ]
+}

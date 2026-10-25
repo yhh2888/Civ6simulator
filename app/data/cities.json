@@ -1,0 +1,47 @@
+{
+  "city-7f1b650c": {
+    "id": "city-7f1b650c",
+    "name": "New City",
+    "x": 66,
+    "y": 27,
+    "population": 4,
+    "civilization": null,
+    "leader": null,
+    "buildings": [
+      "BUILDING_PALACE"
+    ],
+    "districts": [],
+    "wonders": [],
+    "governor": null,
+    "governor_promotions": [],
+    "policies": [],
+    "technologies": [],
+    "civics": [],
+    "religion": null,
+    "housing": 2,
+    "amenities": 0,
+    "notes": "",
+    "worked_tiles": [],
+    "created_from_map": true,
+    "production_queue": [],
+    "production_progress": {},
+    "current_production": null,
+    "production_history": [
+      {
+        "turn": 17,
+        "category": "unit",
+        "target_id": "UNIT_BUILDER"
+      },
+      {
+        "turn": 32,
+        "category": "unit",
+        "target_id": "UNIT_BUILDER"
+      },
+      {
+        "turn": 41,
+        "category": "unit",
+        "target_id": "UNIT_SETTLER"
+      }
+    ]
+  }
+}

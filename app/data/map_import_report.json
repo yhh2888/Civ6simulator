@@ -1,0 +1,28 @@
+{
+  "source": "civ6reader/gamedata/Civ6_Map_Data.csv",
+  "width": 84,
+  "height": 54,
+  "tile_count": 4536,
+  "terrain_counts": {
+    "TERRAIN_COAST": 1761,
+    "TERRAIN_OCEAN": 856,
+    "TERRAIN_PLAINS": 418,
+    "TERRAIN_GRASS": 371,
+    "TERRAIN_PLAINS_HILLS": 206,
+    "TERRAIN_GRASS_HILLS": 166,
+    "TERRAIN_TUNDRA": 150,
+    "TERRAIN_SNOW": 149,
+    "TERRAIN_SNOW_HILLS": 95,
+    "TERRAIN_GRASS_MOUNTAIN": 80,
+    "TERRAIN_DESERT": 75,
+    "TERRAIN_TUNDRA_HILLS": 69,
+    "TERRAIN_PLAINS_MOUNTAIN": 57,
+    "TERRAIN_DESERT_HILLS": 50,
+    "TERRAIN_DESERT_MOUNTAIN": 13,
+    "TERRAIN_SNOW_MOUNTAIN": 11,
+    "TERRAIN_TUNDRA_MOUNTAIN": 9
+  },
+  "feature_nonempty": 1251,
+  "resource_nonempty": 784,
+  "river_tiles": 306
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "city": {
+    "minimum_distance": 3,
+    "initial_population": 1,
+    "initial_territory_radius": 1,
+    "maximum_population": 100,
+    "worked_tiles_per_population": 1,
+    "population_yields": {
+      "Science": 0.5,
+      "Culture": 0.2
+    },
+    "city_center_min_yields": {
+      "Food": 2,
+      "Production": 1
+    }
+  },
+  "production": {
+    "initial_progress": 0,
+    "overflow_policy": "same_turn_queue",
+    "cost_overrides": {
+      "unit": {},
+      "building": {},
+      "wonder": {},
+      "district": {}
+    }
+  },
+  "tile_yields": {
+    "fallback_terrain_yields": {
+      "GRASS": {
+        "Food": 2
+      },
+      "PLAINS": {
+        "Food": 1,
+        "Production": 1
+      },
+      "TUNDRA": {
+        "Food": 1
+      },
+      "COAST": {
+        "Food": 1,
+        "Gold": 1
+      },
+      "OCEAN": {
+        "Food": 1
+      },
+      "LAKE": {
+        "Food": 1,
+        "Gold": 1
+      }
+    },
+    "hill_production_delta": 1
+  },
+  "tile_yield_modifiers": [],
+  "districts": {
+    "default_max_per_city": 1,
+    "overrides": {}
+  },
+  "buildings": {
+    "overrides": {}
+  },
+  "units": {
+    "default_build_charges": 0,
+    "default_base_moves": 1,
+    "overrides": {}
+  },
+  "improvements": {
+    "default_build_charges": 1,
+    "feature_removal_charge_cost": 1,
+    "overrides": {}
+  }
+}

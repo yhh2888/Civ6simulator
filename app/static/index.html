@@ -1,0 +1,2342 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Civ VI City Studio — MAP EDITOR v0.3.0</title>
+    <style>
+      :root {
+        --bg: #0b1218;
+        --panel: #131f29;
+        --panel2: #1a2b37;
+        --line: #304654;
+        --text: #eef5f7;
+        --muted: #9db0bc;
+        --gold: #d6ad59;
+        --green: #76b89b;
+        --blue: #75b9e7;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.45 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        background: #0d171e;
+        border-bottom: 1px solid var(--line);
+      }
+      .version-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #5b7c68;
+        background: #172b23;
+        color: #a8e2bd;
+        border-radius: 999px;
+        padding: 4px 9px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+      .version-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #77d79d;
+        display: inline-block;
+      }
+      h1 {
+        font-size: 19px;
+        margin: 0;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 0 0 10px;
+      }
+      h3 {
+        font-size: 13px;
+        margin: 14px 0 8px;
+        color: #e3c77e;
+      }
+      p {
+        margin: 5px 0;
+        color: var(--muted);
+      }
+      button,
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: var(--text);
+        background: #0c171e;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 8px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--gold);
+      }
+      button.primary {
+        background: var(--gold);
+        color: #1b211f;
+        border-color: var(--gold);
+        font-weight: 700;
+      }
+      button.danger {
+        border-color: #844e4e;
+        color: #f3aaaa;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 12px;
+        padding: 12px;
+        max-width: 1900px;
+        margin: auto;
+      }
+      .map-panel,
+      .side-panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .map-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .toolbar {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .canvas-wrap {
+        position: relative;
+        height: calc(100vh - 154px);
+        min-height: 420px;
+        overflow: hidden;
+        background: radial-gradient(ellipse at center, #1a2d35, #0c141a 70%);
+        touch-action: none;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        cursor: grab;
+      }
+      canvas.dragging {
+        cursor: grabbing;
+      }
+      .map-hint {
+        position: absolute;
+        left: 12px;
+        bottom: 10px;
+        background: #071017d9;
+        border: 1px solid var(--line);
+        padding: 7px 10px;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        pointer-events: none;
+      }
+      .tile-yield-tooltip {
+        position: absolute;
+        z-index: 2;
+        max-width: min(320px, calc(100% - 16px));
+        padding: 9px 11px;
+        border: 1px solid #668b83;
+        border-radius: 8px;
+        background: #071017ed;
+        box-shadow: 0 5px 18px #0008;
+        color: var(--text);
+        font-size: 12px;
+        pointer-events: none;
+      }
+      .tile-yield-tooltip[hidden] {
+        display: none;
+      }
+      .tile-yield-tooltip strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #b9e8d3;
+      }
+      .tile-yield-tooltip .muted {
+        margin-top: 3px;
+        font-size: 11px;
+      }
+      .side-panel {
+        padding: 14px;
+        max-height: calc(100vh - 92px);
+        overflow: auto;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        margin-bottom: 9px;
+      }
+      .field label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .three {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 7px;
+      }
+      .section {
+        border-top: 1px solid var(--line);
+        margin-top: 13px;
+        padding-top: 13px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      .metric {
+        background: var(--panel2);
+        padding: 9px;
+        border-radius: 8px;
+        border: 1px solid #2b414e;
+      }
+      .metric .label {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .metric .value {
+        font-size: 20px;
+        font-weight: 750;
+      }
+      .status {
+        font-size: 11px;
+        color: var(--green);
+        min-height: 16px;
+      }
+      .muted {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .chip {
+        display: inline-block;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .city-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .city-entry {
+        display: flex;
+        gap: 5px;
+      }
+      .city-select {
+        flex: 1;
+        text-align: left;
+      }
+      .city-delete-small {
+        color: #f3aaaa;
+        border-color: #844e4e;
+      }
+      .city-pill {
+        background: var(--panel2);
+        border: 1px solid var(--line);
+        padding: 6px 8px;
+        border-radius: 7px;
+      }
+      .city-pill.active {
+        border-color: var(--gold);
+        color: var(--gold);
+      }
+      .check-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+        max-height: 140px;
+        overflow: auto;
+      }
+      .check-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        padding: 4px;
+        background: #0c171e;
+        border-radius: 5px;
+      }
+      .check-item input {
+        width: auto;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .audit {
+        overflow-wrap: anywhere;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .smallbtn {
+        padding: 5px 7px;
+        font-size: 11px;
+      }
+      .warning {
+        padding: 9px;
+        border: 1px solid #6c5831;
+        background: #332b1b;
+        color: #ecd69e;
+        border-radius: 8px;
+        font-size: 11px;
+        margin-top: 12px;
+      }
+      .city-dialog {
+        width: min(360px, calc(100% - 32px));
+        padding: 18px;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      .city-dialog::backdrop {
+        background: #0009;
+      }
+      .city-dialog h2 {
+        margin-bottom: 6px;
+      }
+      .city-dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      @media (max-width: 1050px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .side-panel {
+          max-height: none;
+        }
+        .canvas-wrap {
+          height: 60vh;
+          min-height: 400px;
+        }
+      }
+      @media (max-width: 560px) {
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .layout {
+          padding: 6px;
+          gap: 6px;
+        }
+        .map-head {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .canvas-wrap {
+          height: 52vh;
+          min-height: 330px;
+        }
+        .metrics {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <div
+          style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"
+        >
+          <h1>🏛 Civ VI City Studio</h1>
+          <span class="version-tag"
+            ><span class="version-dot"></span> MAP EDITOR v0.3.0</span
+          >
+        </div>
+        <p>84 × 54 실제 타일 맵 · 캔버스 직접 조작 · 도시/타일 편집</p>
+      </div>
+      <div class="toolbar">
+        <button id="newCityBtn" class="primary">＋ 새 도시 생성</button>
+        <button id="saveMapBtn">저장</button>
+        <button id="saveMapAsBtn">다른 이름으로 저장</button>
+        <button id="loadSavedMapBtn">저장본 불러오기</button>
+      </div>
+    </header>
+    <dialog id="createCityDialog" class="city-dialog">
+      <form method="dialog">
+        <h2>새 도시 생성</h2>
+        <p id="createCityLocation" class="muted"></p>
+        <div class="field">
+          <label for="newCityName">도시 이름</label>
+          <input id="newCityName" value="New City" maxlength="80" required />
+        </div>
+        <div class="city-dialog-actions">
+          <button value="cancel" formnovalidate>취소</button>
+          <button value="create" class="primary">도시 생성</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="saveMapAsDialog" class="city-dialog">
+      <form method="dialog">
+        <h2>지도를 다른 이름으로 저장</h2>
+        <p class="muted">서버의 app/data/saved_maps 폴더에 새 파일로 저장합니다.</p>
+        <div class="field">
+          <label for="saveMapName">파일 이름</label>
+          <input id="saveMapName" maxlength="84" placeholder="My Civ Map" required />
+        </div>
+        <div class="city-dialog-actions">
+          <button value="cancel" formnovalidate>취소</button>
+          <button value="save" class="primary">저장</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="loadSavedMapDialog" class="city-dialog">
+      <form method="dialog">
+        <h2>저장한 지도 불러오기</h2>
+        <p class="muted">현재 지도와 도시 데이터를 선택한 저장본으로 교체합니다.</p>
+        <div class="field">
+          <label for="savedMapList">저장본</label>
+          <select id="savedMapList" required></select>
+        </div>
+        <div class="city-dialog-actions">
+          <button value="cancel" formnovalidate>취소</button>
+          <button value="load" class="primary">불러오기</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="deleteCityDialog" class="city-dialog">
+      <form method="dialog">
+        <h2>도시 삭제</h2>
+        <p id="deleteCityPrompt"></p>
+        <div class="city-dialog-actions">
+          <button value="cancel" formnovalidate>취소</button>
+          <button value="delete" class="danger">삭제</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="layout">
+      <section class="map-panel">
+        <div class="map-head">
+          <div>
+            <strong id="mapTitle">지도 불러오는 중…</strong>
+            <div class="muted">
+              도시를 만들려면 먼저 타일을 클릭한 다음 ‘새 도시 생성’을 누르세요.
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="zoomIn">＋ 확대</button
+            ><button id="zoomOut">－ 축소</button
+            ><button id="resetView">전체 보기</button
+            ><button id="toggleLabels">좌표 표시</button>
+          </div>
+        </div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="mapCanvas"></canvas>
+          <div
+            id="tileYieldTooltip"
+            class="tile-yield-tooltip"
+            role="tooltip"
+            hidden
+          ></div>
+          <div class="map-hint">
+            클릭: 타일 선택 · 마우스 오버: 타일 산출량 · C: 시민 작업 토글 · 민트 점: 시민 작업 중 · 능선 선: 언덕 · 드래그: 지도 이동 · 휠: 확대/축소 · 도시 중심은
+            금색 테두리 · 소유 타일은 초록 테두리
+          </div>
+        </div>
+      </section>
+      <aside class="side-panel">
+        <h2>도시 목록</h2>
+        <div id="cityList" class="city-list"></div>
+        <p id="globalStatus" class="status">데이터를 불러오는 중…</p>
+        <div class="section">
+          <h2>문명 연구</h2>
+          <p id="researchSummary" class="muted">연구 정보를 불러오는 중…</p>
+          <div class="field">
+            <label for="technologySelect">기술 연구 · 과학</label>
+            <select id="technologySelect"></select>
+            <button id="technologyResearchBtn" type="button">기술 연구 선택</button>
+          </div>
+          <div class="field">
+            <label for="civicSelect">사회제도 연구 · 문화</label>
+            <select id="civicSelect"></select>
+            <button id="civicResearchBtn" type="button">사회제도 연구 선택</button>
+          </div>
+        </div>
+        <div class="section">
+          <h2>선택한 타일</h2>
+          <p id="tileSummary">지도의 타일을 클릭하세요.</p>
+          <div class="two">
+            <div class="field">
+              <label for="terrain">지형</label
+              ><select id="terrain"></select>
+            </div>
+            <div class="field">
+              <label for="feature">자연 지형</label
+              ><select id="feature"></select>
+            </div>
+            <div class="field">
+              <label for="resource">자원</label
+              ><select id="resource"></select>
+            </div>
+            <div class="field">
+              <label for="improvement">시설</label
+              ><select id="improvement"></select>
+            </div>
+            <div class="field">
+              <label for="district">특수지구</label
+              ><select id="district"></select>
+            </div>
+            <div class="field">
+              <label for="worked">시민 작업 (C)</label
+              ><select id="worked">
+                <option value="false">아니오</option>
+                <option value="true">예</option>
+              </select>
+            </div>
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="river">강 타일 표시</label
+              ><select id="river">
+                <option value="false">없음</option>
+                <option value="true">강 데이터 있음</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="hillOverride">언덕 설정</label
+              ><select id="hillOverride">
+                <option value="">원본 지형 기준</option>
+                <option value="true">언덕</option>
+                <option value="false">언덕 아님</option>
+              </select>
+            </div>
+          </div>
+          <button id="applyTile" class="primary">선택 타일에 적용</button>
+        </div>
+        <div class="section">
+          <h2>도시 설정</h2>
+          <p id="citySummary">
+            도시를 선택하거나 지도에서 새 도시를 생성하세요.
+          </p>
+          <div id="cityEditor" class="hidden">
+            <div class="field">
+              <label>도시 영토</label>
+              <p id="cityTerritoryRules" class="muted">
+                새 도시는 중심 및 인접 1타일을 소유합니다. 이후 문화력 자동
+                확장은 없으며, 선택한 타일을 직접 지정합니다.
+              </p>
+              <button id="toggleTileOwnershipBtn" type="button"></button>
+            </div>
+            <div class="field">
+              <label for="cityName">도시 이름</label
+              ><input id="cityName" value="New City" />
+            </div>
+            <div class="two">
+              <div class="field">
+                <label for="population">인구</label
+                ><input
+                  id="population"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value="1"
+                />
+              </div>
+              <div class="field">
+                <label for="housing">주거공간</label
+                ><input
+                  id="housing"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value="2"
+                />
+              </div>
+              <div class="field">
+                <label for="amenities">쾌적도</label
+                ><input
+                  id="amenities"
+                  type="number"
+                  min="-20"
+                  max="20"
+                  value="0"
+                />
+              </div>
+              <div class="field">
+                <label for="civilization">문명 ID</label
+                ><select id="civilization"></select>
+              </div>
+              <div class="field">
+                <label for="leader">지도자 ID</label
+                ><select id="leader"></select>
+              </div>
+              <div class="field">
+                <label for="governor">총독 ID (설정용)</label
+                ><input id="governor" placeholder="예: GOVERNOR_PINGALA" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="notes">메모</label
+              ><textarea
+                id="notes"
+                rows="2"
+                placeholder="도시 계획 메모…"
+              ></textarea>
+            </div>
+            <h3>도시 생산</h3>
+            <p id="productionSummary" class="muted">생산 정보를 불러오는 중…</p>
+            <div class="field">
+              <label for="productionTarget">생산 대상</label>
+              <select id="productionTarget"></select>
+              <p class="muted">지구·불가사의는 배치할 도시 소유 타일을 먼저 지도에서 선택하세요.</p>
+            </div>
+            <button id="productionAddBtn" type="button">대기열에 추가</button>
+            <div id="productionQueue"></div>
+            <button id="endTurnBtn" class="primary" type="button">턴 종료 · 생산 적용</button>
+            <p class="muted">예상 완료 턴은 현재 생산력이 유지된다고 가정하며 XML 기본 비용만 사용합니다.</p>
+            <h3>건설자 / 개척자</h3>
+            <div class="field">
+              <label for="unitSelect">도시 소유 유닛</label>
+              <select id="unitSelect"></select>
+            </div>
+            <div class="two">
+              <div class="field">
+                <label for="unitMoveX">이동 X</label>
+                <input id="unitMoveX" type="number" />
+              </div>
+              <div class="field">
+                <label for="unitMoveY">이동 Y</label>
+                <input id="unitMoveY" type="number" />
+              </div>
+            </div>
+            <button id="unitMoveBtn" type="button">인접 타일로 이동</button>
+            <div class="field">
+              <label for="builderImprovement">시설 건설</label>
+              <select id="builderImprovement"></select>
+            </div>
+            <div class="toolbar">
+              <button id="builderBuildBtn" type="button">시설 건설 (건설자)</button>
+              <button id="builderRemoveBtn" type="button">자연 지형 제거 (건설자)</button>
+            </div>
+            <div class="field">
+              <label for="settlerCityName">개척자 도시 이름</label>
+              <input id="settlerCityName" value="New City" maxlength="80" />
+            </div>
+            <button id="settlerFoundBtn" type="button">현재 타일에 도시 건설 (개척자)</button>
+            <p id="unitStatus" class="muted"></p>
+            <h3>수동 편집 모드 · 보유 상태 직접 지정</h3>
+            <input id="buildingSearch" placeholder="건물 이름 또는 ID 검색…" />
+            <div id="buildingList" class="check-grid"></div>
+            <h3>정책 카드 (설정용)</h3>
+            <input id="policySearch" placeholder="정책 검색…" />
+            <div id="policyList" class="check-grid"></div>
+            <h3>총독 승급 (직접 입력 가능)</h3>
+            <input id="promotionInput" placeholder="승급 ID를 쉼표로 구분" />
+            <div class="toolbar">
+              <button id="saveCityBtn" class="primary">도시 저장</button
+              ><button id="deleteCityBtn" class="danger">도시 삭제</button>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <h2>산출량 계산</h2>
+          <div id="metrics" class="metrics"></div>
+          <div id="yieldBreakdown"></div>
+          <div class="warning">
+            XML에서 확인되는 지형·특성·자원·시설·시민 작업 지구·건물 산출량과
+            일부 지구 인접 보너스를 반영합니다. 인구 초과 작업 타일, 강 인접
+            규칙, 정책·총독·문명 능력, 조건부 수정자, 모든 DLC 규칙은 완전하게
+            시뮬레이션하지 않습니다. 계산 패널의 구현/미구현 규칙과 주의 사항을
+            확인하세요.
+          </div>
+        </div>
+        <div class="section">
+          <h2>데이터 감사</h2>
+          <div id="audit" class="audit"></div>
+        </div>
+      </aside>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const YIELDS = [
+        "Food",
+        "Production",
+        "Gold",
+        "Science",
+        "Culture",
+        "Faith",
+      ];
+      const state = {
+        map: null,
+        catalog: null,
+        game: { turn: 1, units: [] },
+        cities: [],
+        rules: null,
+        selectedTile: null,
+        selectedCityId: null,
+        showCoords: false,
+        scale: 0.75,
+        offsetX: 0,
+        offsetY: 0,
+        drag: null,
+        dirty: false,
+      };
+      const canvas = $("mapCanvas"),
+        ctx = canvas.getContext("2d");
+      let hoverTimer = null;
+      let hoverController = null;
+      let hoverTileKey = null;
+      let hoverPointer = { x: 0, y: 0 };
+      const codeLabel = (s) =>
+        (s || "")
+          .replace(/^LOC_/, "")
+          .replace(/_NAME$/, "")
+          .replace(
+            /^(TERRAIN|FEATURE|IMPROVEMENT|RESOURCE|BUILDING|DISTRICT|POLICY|LEADER|CIVILIZATION)_/,
+            "",
+          )
+          .replaceAll("_", " ")
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+      function itemLabel(i) {
+        return i.label || codeLabel(i.id);
+      }
+      function setOptions(id, items, emptyLabel = "— 없음 —") {
+        const s = $(id);
+        s.innerHTML = "";
+        const o = document.createElement("option");
+        o.value = "";
+        o.textContent = emptyLabel;
+        s.appendChild(o);
+        for (const i of items) {
+          const x = document.createElement("option");
+          x.value = i.id;
+          x.textContent = itemLabel(i);
+          s.appendChild(x);
+        }
+      }
+      function selectedTile() {
+        return state.map?.tiles.find(
+          (t) => t.x === state.selectedTile?.x && t.y === state.selectedTile?.y,
+        );
+      }
+      function selectedCity() {
+        return state.cities.find((c) => c.id === state.selectedCityId);
+      }
+      function hexDistance(x1, y1, x2, y2) {
+        const q1 = x1 - (y1 - (y1 & 1)) / 2;
+        const q2 = x2 - (y2 - (y2 & 1)) / 2;
+        return Math.max(
+          Math.abs(q1 - q2),
+          Math.abs(y1 - y2),
+          Math.abs(q1 + y1 - q2 - y2),
+        );
+      }
+      function updateCitySummary(city) {
+        const ownedCount = state.map.tiles.filter(
+          (tile) => tile.owner_city_id === city.id,
+        ).length;
+        $("citySummary").textContent =
+          `${city.name} · 좌표 (${city.x}, ${city.y}) · 인구 ${city.population} · 소유 타일 ${ownedCount}개`;
+      }
+      function terrainColor(t) {
+        const s = (t || "").replace("TERRAIN_", "");
+        return (
+          {
+            OCEAN: "#183d59",
+            COAST: "#2b6681",
+            GRASS: "#547d4c",
+            GRASS_HILLS: "#66845c",
+            PLAINS: "#858148",
+            PLAINS_HILLS: "#9b8d4f",
+            DESERT: "#c3a164",
+            DESERT_HILLS: "#a9824e",
+            TUNDRA: "#71827d",
+            TUNDRA_HILLS: "#697b75",
+            SNOW: "#d7e1df",
+            SNOW_HILLS: "#aabbbd",
+            MOUNTAIN: "#686b6b",
+            LAKE: "#286c8a",
+          }[s] || "#596a65"
+        );
+      }
+      function tileName(t) {
+        return `${t.x}, ${t.y}`;
+      }
+      function tileIsHills(tile) {
+        return tile.hill_override === null || tile.hill_override === undefined
+          ? String(tile.terrain || "").includes("_HILLS")
+          : Boolean(tile.hill_override);
+      }
+
+      function tileSize() {
+        return 10 * state.scale;
+      }
+
+      function offsetToPixel(x, y) {
+        const r = tileSize();
+
+        return {
+          x: state.offsetX + r * Math.sqrt(3) * (x + (y % 2) * 0.5),
+          y: state.offsetY + r * 1.5 * y,
+        };
+      }
+
+      function tilePolygon(x, y) {
+        const p = offsetToPixel(x, y);
+        const r = tileSize();
+        const pts = [];
+
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 3) * i - Math.PI / 2;
+          pts.push([p.x + r * Math.cos(a), p.y + r * Math.sin(a)]);
+        }
+
+        return pts;
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(rect.width * dpr);
+        canvas.height = Math.floor(rect.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawMap();
+      }
+      function fitMap() {
+        if (!state.map) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const r = 10;
+        const rowOffset = state.map.height > 1 ? 0.5 : 0;
+        const mapW =
+          r * Math.sqrt(3) * (state.map.width - 1 + rowOffset + 1);
+        const mapH = r * (1.5 * (state.map.height - 1) + 2);
+
+        state.scale = Math.max(
+          0.2,
+          Math.min(1.25, (rect.width - 24) / mapW, (rect.height - 24) / mapH),
+        );
+
+        const actualW = mapW * state.scale;
+        const actualH = mapH * state.scale;
+
+        state.offsetX =
+          (rect.width - actualW) / 2 +
+          (Math.sqrt(3) / 2) * r * state.scale;
+        state.offsetY = (rect.height - actualH) / 2 + r * state.scale;
+
+        drawMap();
+      }
+      function zoomAt(px, py, factor) {
+        const oldScale = state.scale;
+        state.scale = Math.max(0.2, Math.min(2.4, oldScale * factor));
+        const ratio = state.scale / oldScale;
+        state.offsetX = px - (px - state.offsetX) * ratio;
+        state.offsetY = py - (py - state.offsetY) * ratio;
+        drawMap();
+      }
+      function drawMap() {
+        if (!state.map) return;
+        const w = canvas.clientWidth,
+          h = canvas.clientHeight;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "#0c171d";
+        ctx.fillRect(0, 0, w, h);
+        const citiesByPos = new Map(
+          state.cities.map((c) => [`${c.x},${c.y}`, c]),
+        );
+        const size = 10 * state.scale;
+        ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+        for (const t of state.map.tiles) {
+          const p = offsetToPixel(t.x, t.y);
+          if (
+            p.x < -size * 2 ||
+            p.y < -size * 2 ||
+            p.x > w + size * 2 ||
+            p.y > h + size * 2
+          )
+            continue;
+          const pts = tilePolygon(t.x, t.y);
+          ctx.beginPath();
+          pts.forEach((v, i) =>
+            i ? ctx.lineTo(v[0], v[1]) : ctx.moveTo(v[0], v[1]),
+          );
+          ctx.closePath();
+          ctx.fillStyle = terrainColor(t.terrain);
+          ctx.fill();
+          ctx.strokeStyle = "#14252d";
+          ctx.stroke();
+          if (t.owner_city_id) {
+            ctx.beginPath();
+            pts.forEach((v, i) =>
+              i ? ctx.lineTo(v[0], v[1]) : ctx.moveTo(v[0], v[1]),
+            );
+            ctx.closePath();
+            ctx.fillStyle = "rgba(118, 184, 155, 0.18)";
+            ctx.fill();
+            ctx.strokeStyle = "#76b89b";
+            ctx.lineWidth = Math.max(1, state.scale * 1.5);
+            ctx.stroke();
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          }
+          if (t.feature) {
+            ctx.fillStyle =
+              {
+                FEATURE_FOREST: "#174b30",
+                FEATURE_JUNGLE: "#0b613d",
+                FEATURE_MARSH: "#284d4c",
+                FEATURE_ICE: "#c8e6ed",
+                FEATURE_OASIS: "#59bca4",
+                FEATURE_REEF: "#64b8b8",
+              }[t.feature] || "#6c8a57";
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size * 0.26, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          if (t.resource) {
+            ctx.fillStyle = "#f1d078";
+            ctx.beginPath();
+            ctx.arc(
+              p.x + size * 0.28,
+              p.y - size * 0.18,
+              size * 0.16,
+              0,
+              Math.PI * 2,
+            );
+            ctx.fill();
+          }
+          if (t.improvement) {
+            ctx.fillStyle = "#f3e4ba";
+            ctx.fillRect(
+              p.x - size * 0.15,
+              p.y + size * 0.1,
+              size * 0.3,
+              size * 0.3,
+            );
+          }
+          if (t.river) {
+            ctx.strokeStyle = "#69c7ef";
+            ctx.lineWidth = Math.max(1, state.scale * 1.4);
+            ctx.beginPath();
+            ctx.moveTo(p.x - size * 0.45, p.y + size * 0.1);
+            ctx.lineTo(p.x - size * 0.15, p.y - size * 0.2);
+            ctx.lineTo(p.x + size * 0.1, p.y + size * 0.25);
+            ctx.stroke();
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          }
+          if (t.worked) {
+            ctx.beginPath();
+            ctx.arc(
+              p.x - size * 0.38,
+              p.y - size * 0.34,
+              Math.max(2, size * 0.15),
+              0,
+              Math.PI * 2,
+            );
+            ctx.fillStyle = "#91f5bc";
+            ctx.fill();
+            ctx.strokeStyle = "#173326";
+            ctx.lineWidth = Math.max(1, size * 0.045);
+            ctx.stroke();
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          }
+          if (tileIsHills(t)) {
+            ctx.beginPath();
+            ctx.moveTo(p.x - size * 0.3, p.y + size * 0.22);
+            ctx.lineTo(p.x - size * 0.08, p.y - size * 0.08);
+            ctx.lineTo(p.x + size * 0.08, p.y + size * 0.08);
+            ctx.lineTo(p.x + size * 0.3, p.y - size * 0.2);
+            ctx.strokeStyle = "#e6e0bd";
+            ctx.lineWidth = Math.max(1, size * 0.07);
+            ctx.stroke();
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          }
+          const city = citiesByPos.get(`${t.x},${t.y}`);
+          if (city) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size * 0.48, 0, Math.PI * 2);
+            ctx.fillStyle = "#d6ad59";
+            ctx.fill();
+            ctx.strokeStyle = "#fff0bf";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = "#231c10";
+            ctx.font = `bold ${Math.max(8, 9 * state.scale)}px system-ui`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(city.population ?? 1), p.x, p.y);
+            if (state.scale > 0.52) {
+              ctx.fillStyle = "#fff4d1";
+              ctx.font = `${Math.max(7, 8 * state.scale)}px system-ui`;
+              ctx.fillText(city.name.slice(0, 8), p.x, p.y + size * 0.7);
+            }
+          }
+          if (
+            state.selectedTile &&
+            t.x === state.selectedTile.x &&
+            t.y === state.selectedTile.y
+          ) {
+            ctx.beginPath();
+            pts.forEach((v, i) =>
+              i ? ctx.lineTo(v[0], v[1]) : ctx.moveTo(v[0], v[1]),
+            );
+            ctx.closePath();
+            ctx.strokeStyle = "#ffdf80";
+            ctx.lineWidth = 2.2;
+            ctx.stroke();
+          }
+          if (state.showCoords && state.scale > 0.4) {
+            ctx.fillStyle = "#ffffff9b";
+            ctx.font = `${Math.max(6, 7 * state.scale)}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.fillText(`${t.x},${t.y}`, p.x, p.y + size * 0.62);
+          }
+        }
+      }
+
+      function screenToTile(px, py) {
+        if (!state.map) return null;
+        let best = null;
+        let dist = Infinity;
+        const size = tileSize();
+
+        for (const t of state.map.tiles) {
+          const p = offsetToPixel(t.x, t.y);
+          const d = Math.hypot(px - p.x, py - p.y);
+
+          if (d < dist) {
+            dist = d;
+            best = { x: t.x, y: t.y };
+          }
+        }
+
+        return dist <= size ? best : null;
+      }
+
+      function positionTileYieldTooltip() {
+        const tooltip = $("tileYieldTooltip");
+        const wrap = $("canvasWrap");
+        const left = Math.min(
+          hoverPointer.x + 14,
+          wrap.clientWidth - tooltip.offsetWidth - 8,
+        );
+        const top = Math.min(
+          hoverPointer.y + 14,
+          wrap.clientHeight - tooltip.offsetHeight - 8,
+        );
+        tooltip.style.left = `${Math.max(8, left)}px`;
+        tooltip.style.top = `${Math.max(8, top)}px`;
+      }
+
+      function hideTileYieldTooltip() {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+        hoverController?.abort();
+        hoverController = null;
+        hoverTileKey = null;
+        $("tileYieldTooltip").hidden = true;
+      }
+
+      function updateTileYieldHover(pos, clientX, clientY) {
+        const wrap = $("canvasWrap");
+        const rect = wrap.getBoundingClientRect();
+        hoverPointer = { x: clientX - rect.left, y: clientY - rect.top };
+        if (!pos || state.drag?.moved) {
+          hideTileYieldTooltip();
+          return;
+        }
+
+        const key = `${pos.x},${pos.y}`;
+        if (key === hoverTileKey) {
+          positionTileYieldTooltip();
+          return;
+        }
+        clearTimeout(hoverTimer);
+        hoverController?.abort();
+        hoverTileKey = key;
+        const tooltip = $("tileYieldTooltip");
+        tooltip.replaceChildren();
+        tooltip.hidden = true;
+        hoverTimer = setTimeout(async () => {
+          const controller = new AbortController();
+          hoverController = controller;
+          try {
+            const response = await fetch(
+              `/api/tiles/${pos.x}/${pos.y}/yields`,
+              { signal: controller.signal, cache: "no-store" },
+            );
+            if (!response.ok) {
+              throw new Error(`산출량 조회 실패 (${response.status})`);
+            }
+            const tile = await response.json();
+            if (hoverTileKey !== key) return;
+
+            const title = document.createElement("strong");
+            title.textContent = `(${tile.x}, ${tile.y}) · ${codeLabel(tile.terrain)}`;
+            const yields = document.createElement("div");
+            yields.textContent =
+              YIELDS.filter((name) => Number(tile.yields?.[name]) > 0)
+                .map((name) => `${name} ${Number(tile.yields[name].toFixed(1))}`)
+                .join(" · ") || "산출량 없음";
+            const stateLine = document.createElement("div");
+            stateLine.className = "muted";
+            stateLine.textContent = tile.city_center
+              ? "도심 타일"
+              : tile.preview
+                ? "시민 작업 시 예상 산출량"
+                : tile.worked
+                  ? "시민 작업 중"
+                  : "미작업 타일";
+            const note = document.createElement("div");
+            note.className = "muted";
+            note.textContent = "타일 자체 산출량 · 도시/인접 보너스 제외";
+            tooltip.append(title, yields, stateLine, note);
+            for (const modifier of tile.applied_modifiers || []) {
+              const detail = document.createElement("div");
+              detail.className = "muted";
+              const changes = YIELDS.filter(
+                (name) => Number(modifier.changes?.[name]) !== 0,
+              )
+                .map((name) => `${name} ${modifier.changes[name] > 0 ? "+" : ""}${modifier.changes[name]}`)
+                .join(" · ");
+              detail.textContent = `${modifier.id}: ${changes} (적용 후 ${YIELDS.filter((name) => Number(modifier.after_yields?.[name]) !== 0).map((name) => `${name} ${modifier.after_yields[name]}`).join(" · ") || "산출량 없음"})`;
+              tooltip.appendChild(detail);
+            }
+            tooltip.hidden = false;
+            positionTileYieldTooltip();
+          } catch (error) {
+            if (error.name === "AbortError" || hoverTileKey !== key) return;
+            const title = document.createElement("strong");
+            title.textContent = `(${pos.x}, ${pos.y}) 산출량`;
+            const message = document.createElement("div");
+            message.textContent = error.message;
+            tooltip.replaceChildren(title, message);
+            tooltip.hidden = false;
+            positionTileYieldTooltip();
+          }
+        }, 100);
+      }
+
+      canvas.addEventListener("pointerdown", (e) => {
+        canvas.setPointerCapture(e.pointerId);
+        state.drag = {
+          x: e.clientX,
+          y: e.clientY,
+          ox: state.offsetX,
+          oy: state.offsetY,
+          moved: false,
+        };
+        canvas.classList.add("dragging");
+      });
+      canvas.addEventListener("pointermove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const pos = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
+        updateTileYieldHover(pos, e.clientX, e.clientY);
+        if (!state.drag) return;
+        const dx = e.clientX - state.drag.x,
+          dy = e.clientY - state.drag.y;
+        if (Math.abs(dx) + Math.abs(dy) > 4) state.drag.moved = true;
+        if (state.drag.moved) {
+          state.offsetX = state.drag.ox + dx;
+          state.offsetY = state.drag.oy + dy;
+          drawMap();
+        }
+      });
+      canvas.addEventListener("pointerleave", () => {
+        if (!state.drag) hideTileYieldTooltip();
+      });
+      canvas.addEventListener("pointerup", (e) => {
+        if (!state.drag) return;
+        const moved = state.drag.moved;
+        state.drag = null;
+        canvas.classList.remove("dragging");
+        if (!moved) {
+          const r = canvas.getBoundingClientRect();
+          const pos = screenToTile(e.clientX - r.left, e.clientY - r.top);
+          if (pos) {
+            state.selectedTile = pos;
+            syncTileEditor();
+            drawMap();
+            const city = state.cities.find(
+              (c) => c.x === pos.x && c.y === pos.y,
+            );
+            if (city) selectCity(city.id);
+          }
+        }
+      });
+      canvas.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+
+          const r = canvas.getBoundingClientRect();
+          const px = e.clientX - r.left;
+          const py = e.clientY - r.top;
+
+          zoomAt(px, py, e.deltaY < 0 ? 1.05 : 1 / 1.05);
+        },
+        { passive: false },
+      );
+      async function toggleSelectedTileWorked() {
+        const tile = selectedTile();
+        if (!tile) {
+          setStatus("먼저 지도의 타일을 선택하세요.");
+          return;
+        }
+        const city = state.cities.find(
+          (item) => item.id === tile.owner_city_id,
+        );
+        if (!city) {
+          setStatus("시민 작업은 도시 소유 타일에서만 변경할 수 있습니다.");
+          return;
+        }
+        if (city.x === tile.x && city.y === tile.y) {
+          setStatus("도심 타일은 항상 시민 작업 상태입니다.");
+          return;
+        }
+        try {
+          const updated = await productionRequest(
+            `/api/map/tile/${tile.x}/${tile.y}`,
+            "PUT",
+            { worked: !tile.worked },
+          );
+          Object.assign(tile, updated);
+          syncTileEditor();
+          drawMap();
+          if (selectedCity()?.id === city.id) await calculate();
+          setStatus(
+            `타일 (${tile.x}, ${tile.y}) 시민 작업: ${tile.worked ? "예" : "아니오"}`,
+          );
+        } catch (error) {
+          setStatus(`시민 작업 변경 실패: ${error.message}`);
+        }
+      }
+      document.addEventListener("keydown", (event) => {
+        const target = event.target;
+        if (
+          event.code !== "KeyC" ||
+          event.ctrlKey ||
+          event.altKey ||
+          event.metaKey ||
+          event.repeat ||
+          target instanceof Element &&
+            target.closest(
+              "input, textarea, select, button, [contenteditable='true']",
+            )
+        ) {
+          return;
+        }
+        event.preventDefault();
+        void toggleSelectedTileWorked();
+      });
+      function syncTileEditor() {
+        const t = selectedTile();
+        if (!t) return;
+        $("tileSummary").textContent =
+          `좌표 (${t.x}, ${t.y}) · ${codeLabel(t.terrain)}${tileIsHills(t) ? " · 언덕" : ""}${t.owner_city_id ? " · 도시 소유 타일" : ""}`;
+        ["terrain", "feature", "resource", "improvement", "district"].forEach(
+          (k) => ($(k).value = t[k] || ""),
+        );
+        $("worked").value = String(!!t.worked);
+        const city = state.cities.find((item) => item.id === t.owner_city_id);
+        const isCityCenter =
+          city && city.x === t.x && city.y === t.y;
+        $("worked").disabled = !city || !!isCityCenter;
+        if (isCityCenter) $("worked").value = "true";
+        $("river").value = String(!!t.river);
+        $("hillOverride").value =
+          t.hill_override === null || t.hill_override === undefined
+            ? ""
+            : String(t.hill_override);
+        syncTileOwnershipControl();
+      }
+      function syncTileOwnershipControl() {
+        const button = $("toggleTileOwnershipBtn");
+        const city = selectedCity();
+        const tile = selectedTile();
+        if (!city || !tile) {
+          button.disabled = true;
+          button.textContent = "도시와 타일을 선택하세요";
+          return;
+        }
+        if (tile.owner_city_id === city.id) {
+          const isCenter = tile.x === city.x && tile.y === city.y;
+          button.disabled = isCenter;
+          button.textContent = isCenter
+            ? "도시 중심 타일 (항상 소유)"
+            : "선택 타일 소유 해제";
+          return;
+        }
+        if (tile.owner_city_id) {
+          const owner = state.cities.find(
+            (item) => item.id === tile.owner_city_id,
+          );
+          button.disabled = true;
+          button.textContent = `다른 도시 소유${owner ? `: ${owner.name}` : ""}`;
+          return;
+        }
+        button.disabled = false;
+        button.textContent = "선택 타일 소유";
+      }
+      async function toggleTileOwnership() {
+        const city = selectedCity();
+        const tile = selectedTile();
+        if (!city || !tile) return;
+        const owned = tile.owner_city_id !== city.id;
+        const response = await fetch(
+          `/api/cities/${city.id}/tiles/${tile.x}/${tile.y}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ owned }),
+          },
+        );
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          setStatus(error.detail || "타일 소유권 변경 실패");
+          return;
+        }
+        Object.assign(tile, await response.json());
+        syncTileEditor();
+        drawMap();
+        updateCitySummary(city);
+        setStatus(
+          owned
+            ? `타일 (${tile.x}, ${tile.y})을(를) ${city.name} 소유로 지정했습니다.`
+            : `타일 (${tile.x}, ${tile.y})의 소유를 해제했습니다.`,
+        );
+      }
+      async function applyTile() {
+        const t = selectedTile();
+        if (!t) return;
+        const payload = {
+          terrain: $("terrain").value,
+          feature: $("feature").value || null,
+          resource: $("resource").value || null,
+          improvement: $("improvement").value || null,
+          district: $("district").value || null,
+          worked: $("worked").value === "true",
+          river: $("river").value === "true",
+          hill_override:
+            $("hillOverride").value === ""
+              ? null
+              : $("hillOverride").value === "true",
+        };
+        const r = await fetch(`/api/map/tile/${t.x}/${t.y}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!r.ok) {
+          const error = await r.json().catch(() => ({}));
+          setStatus(error.detail || "타일 저장 실패");
+          return;
+        }
+        Object.assign(t, await r.json());
+        state.dirty = true;
+        syncTileEditor();
+        drawMap();
+        if (state.selectedCityId) {
+          const city = selectedCity();
+          if (city) updateCitySummary(city);
+          await calculate();
+        }
+        setStatus(`타일 (${t.x}, ${t.y}) 수정됨`);
+      }
+      function setStatus(msg) {
+        $("globalStatus").textContent = msg;
+      }
+      function waitForDialog(dialog) {
+        return new Promise((resolve) => {
+          dialog.addEventListener(
+            "close",
+            () => resolve(dialog.returnValue),
+            { once: true },
+          );
+          dialog.showModal();
+        });
+      }
+      async function createCity() {
+        const t = selectedTile();
+        if (!t) {
+          setStatus("먼저 지도에서 도시 중심 타일을 선택하세요.");
+          return;
+        }
+        if (state.cities.some((c) => c.x === t.x && c.y === t.y)) {
+          selectCity(state.cities.find((c) => c.x === t.x && c.y === t.y).id);
+          setStatus("이 타일에는 이미 도시가 있습니다.");
+          return;
+        }
+        if (
+          state.cities.some(
+            (city) =>
+              hexDistance(t.x, t.y, city.x, city.y) <
+              state.rules.city.minimum_distance,
+          )
+        ) {
+          setStatus(
+            `다른 도시와 최소 ${state.rules.city.minimum_distance}타일 이상 떨어져야 합니다.`,
+          );
+          return;
+        }
+        const dialog = $("createCityDialog");
+        const nameInput = $("newCityName");
+        $("createCityLocation").textContent = `중심 타일 (${t.x}, ${t.y})`;
+        nameInput.value = "New City";
+        dialog.showModal();
+        nameInput.focus();
+        nameInput.select();
+        const result = await new Promise((resolve) => {
+          dialog.addEventListener(
+            "close",
+            () =>
+              resolve(
+                dialog.returnValue === "create"
+                  ? nameInput.value.trim() || "New City"
+                  : null,
+              ),
+            { once: true },
+          );
+        });
+        if (result === null) return;
+        const r = await fetch("/api/cities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: result,
+            x: t.x,
+            y: t.y,
+          }),
+        });
+        if (!r.ok) {
+          const error = await r.json().catch(() => ({}));
+          setStatus(error.detail || "도시 생성 실패");
+          return;
+        }
+        const city = await r.json();
+        state.cities.push(city);
+        state.selectedCityId = city.id;
+        state.map = await (await fetch("/api/map")).json();
+        renderCities();
+        selectCity(city.id);
+        drawMap();
+        setStatus(
+          `도시 "${city.name}" 생성 완료 · 인구 ${city.population}`,
+        );
+      }
+      function renderCities() {
+        const root = $("cityList");
+        root.innerHTML = "";
+        for (const c of state.cities) {
+          const entry = document.createElement("div");
+          entry.className = "city-entry";
+          const select = document.createElement("button");
+          select.className =
+            "city-pill city-select" +
+            (c.id === state.selectedCityId ? " active" : "");
+          select.textContent = `🏛 ${c.name} (${c.population})`;
+          select.onclick = () => selectCity(c.id);
+          const remove = document.createElement("button");
+          remove.className = "city-delete-small";
+          remove.type = "button";
+          remove.textContent = "삭제";
+          remove.setAttribute("aria-label", `${c.name} 도시 삭제`);
+          remove.onclick = () => confirmAndDeleteCity(c.id);
+          entry.append(select, remove);
+          root.appendChild(entry);
+        }
+        if (!state.cities.length)
+          root.innerHTML = '<span class="muted">아직 도시가 없습니다.</span>';
+      }
+      function selectCity(id) {
+        state.selectedCityId = id;
+        const c = state.cities.find((x) => x.id === id);
+        if (!c) return;
+        renderCities();
+        $("cityEditor").classList.remove("hidden");
+        syncTileOwnershipControl();
+        $("cityName").value = c.name;
+        $("population").value = c.population;
+        $("housing").value = c.housing ?? 2;
+        $("amenities").value = c.amenities ?? 0;
+        $("civilization").value = c.civilization || "";
+        $("leader").value = c.leader || "";
+        $("governor").value = c.governor || "";
+        $("notes").value = c.notes || "";
+        $("promotionInput").value = (c.governor_promotions || []).join(", ");
+        const selected = new Set([
+          ...(c.buildings || []),
+          ...(c.wonders || []),
+        ]);
+        document
+          .querySelectorAll("[data-building]")
+          .forEach((x) => (x.checked = selected.has(x.dataset.building)));
+        document
+          .querySelectorAll("[data-policy]")
+          .forEach(
+            (x) => (x.checked = (c.policies || []).includes(x.dataset.policy)),
+          );
+        updateCitySummary(c);
+        drawMap();
+        calculate();
+        refreshProductionPanel();
+      }
+      async function saveCity() {
+        const c = selectedCity();
+        if (!c) return;
+        const selectedBuildings = [
+          ...document.querySelectorAll("[data-building]:checked"),
+        ].map((x) => x.dataset.building);
+        const selectedPolicies = [
+          ...document.querySelectorAll("[data-policy]:checked"),
+        ].map((x) => x.dataset.policy);
+        const payload = {
+          name: $("cityName").value || "New City",
+          population: Math.max(
+            1,
+            Math.min(
+              state.rules.city.maximum_population,
+              Number($("population").value) ||
+                state.rules.city.initial_population,
+            ),
+          ),
+          housing: Number($("housing").value) || 0,
+          amenities: Number($("amenities").value) || 0,
+          civilization: $("civilization").value || null,
+          leader: $("leader").value || null,
+          governor: $("governor").value || null,
+          notes: $("notes").value,
+          buildings: selectedBuildings.filter((id) => !id.includes("WONDER")),
+          wonders: selectedBuildings.filter((id) => id.includes("WONDER")),
+          policies: selectedPolicies,
+          governor_promotions: $("promotionInput")
+            .value.split(",")
+            .map((x) => x.trim())
+            .filter(Boolean),
+        };
+        const r = await fetch("/api/cities/" + c.id, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!r.ok) {
+          const error = await r.json().catch(() => ({}));
+          setStatus(error.detail || `도시 저장 실패 (${r.status})`);
+          return;
+        }
+        Object.assign(c, await r.json());
+        state.map = await (await fetch("/api/map", { cache: "no-store" })).json();
+        renderCities();
+        updateCitySummary(c);
+        drawMap();
+        await calculate();
+        await refreshProductionPanel();
+        await refreshResearchPanel();
+        setStatus(`도시 "${c.name}" 저장 완료`);
+      }
+      async function deleteCity() {
+        const city = selectedCity();
+        if (city) await confirmAndDeleteCity(city.id);
+      }
+      async function confirmAndDeleteCity(cityId) {
+        const city = state.cities.find((item) => item.id === cityId);
+        if (!city) return;
+        $("deleteCityPrompt").textContent =
+          `"${city.name}" 도시를 삭제할까요? 이 도시가 소유한 타일의 소유권과 시민 작업 상태도 해제됩니다.`;
+        if ((await waitForDialog($("deleteCityDialog"))) !== "delete") return;
+        let response;
+        try {
+          response = await fetch(`/api/cities/${encodeURIComponent(cityId)}`, {
+            method: "DELETE",
+          });
+        } catch (error) {
+          setStatus(`도시 삭제 요청 실패: ${error.message}`);
+          return;
+        }
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          setStatus(error.detail || `도시 삭제 실패 (${response.status})`);
+          return;
+        }
+        const previousSelection = state.selectedCityId;
+        state.cities = state.cities.filter((item) => item.id !== cityId);
+        state.map.tiles.forEach((tile) => {
+          if (tile.owner_city_id === cityId) {
+            tile.owner_city_id = null;
+            tile.worked = false;
+          }
+        });
+        let syncError = "";
+        try {
+          const mapResponse = await fetch("/api/map", { cache: "no-store" });
+          if (!mapResponse.ok) throw new Error(`지도 새로고침 실패 (${mapResponse.status})`);
+          state.map = await mapResponse.json();
+        } catch (error) {
+          syncError = error.message;
+        }
+        state.selectedCityId =
+          previousSelection === cityId ? null : previousSelection;
+        renderCities();
+        drawMap();
+        if (selectedCity()) {
+          selectCity(state.selectedCityId);
+        } else if (state.cities.length) {
+          selectCity(state.cities[0].id);
+        } else {
+          $("cityEditor").classList.add("hidden");
+          $("citySummary").textContent = "도시를 선택하거나 생성하세요.";
+          $("metrics").replaceChildren();
+          $("yieldBreakdown").replaceChildren();
+        }
+        setStatus(
+          syncError
+            ? `도시 "${city.name}"는 삭제됐지만 지도 새로고침에 실패했습니다: ${syncError}`
+            : `도시 "${city.name}" 삭제 완료`,
+        );
+      }
+      async function calculate() {
+        const c = selectedCity();
+        if (!c) return;
+        const r = await fetch("/api/calculate/" + c.id, { method: "POST" });
+        if (!r.ok) {
+          const error = await r.json().catch(() => ({}));
+          setStatus(error.detail || `산출량 계산 실패 (${r.status})`);
+          return;
+        }
+        const data = await r.json();
+        if (selectedCity()?.id !== c.id) return;
+        $("metrics").replaceChildren();
+        for (const y of YIELDS) {
+          const d = document.createElement("div");
+          d.className = "metric";
+          const label = document.createElement("div");
+          label.className = "label";
+          label.textContent = y;
+          const value = document.createElement("div");
+          value.className = "value";
+          value.textContent = Number((data.totals[y] || 0).toFixed(1));
+          d.append(label, value);
+          $("metrics").appendChild(d);
+        }
+        const breakdown = $("yieldBreakdown");
+        breakdown.replaceChildren();
+        const formatYields = (values) =>
+          YIELDS.filter((yieldName) => values[yieldName])
+            .map((yieldName) => `${yieldName} ${values[yieldName]}`)
+            .join(" · ") || "산출량 없음";
+        const addDetail = (title, text) => {
+          const heading = document.createElement("h3");
+          heading.textContent = title;
+          const content = document.createElement("div");
+          content.className = "muted";
+          content.textContent = text;
+          breakdown.append(heading, content);
+        };
+        const workedCount = data.tiles.filter((tile) => tile.worked).length;
+        addDetail(
+          "작업 중인 타일",
+          `도심 포함 ${workedCount}/${data.worker_limit + 1}개 타일 · 시민 작업 ${Math.max(0, workedCount - 1)}/${data.worker_limit}명 · 인구 제한으로 제외 ${data.ignored_worked_tile_count}개`,
+        );
+        addDetail(
+          "계산 근거",
+          `소유 타일 ${data.tiles.length}개 · 도시 인구 ${c.population}`,
+        );
+        for (const [title, values] of Object.entries(data.breakdown)) {
+          addDetail(
+            title === "population" ? "인구 산출량" : title,
+            formatYields(values),
+          );
+        }
+        for (const tile of data.tiles.filter((item) => item.worked)) {
+          addDetail(
+            `타일 (${tile.x}, ${tile.y})${tile.city_center ? " · 도심" : ""}${tile.is_hills ? " · 언덕" : ""}`,
+            `기본: ${formatYields(tile.base_yields)} / 추가: ${formatYields(tile.bonus_yields)}`,
+          );
+          for (const modifier of tile.applied_modifiers || []) {
+            addDetail(
+              `수정자 ${modifier.id} · 타일 (${tile.x}, ${tile.y})`,
+              `${modifier.description ? `${modifier.description} · ` : ""}적용 전: ${formatYields(modifier.before_yields)} / 변경: ${formatYields(modifier.changes)} / 적용 후: ${formatYields(modifier.after_yields)}`,
+            );
+          }
+        }
+        for (const district of data.districts) {
+          addDetail(
+            `${district.id} (${district.x}, ${district.y}) 인접 보너스`,
+            formatYields(district.yields),
+          );
+        }
+        addDetail("구현된 규칙", data.coverage.implemented.join(" · "));
+        addDetail("미구현 규칙", data.coverage.not_implemented.join(" · "));
+        addDetail("주의 사항", data.caveats.join(" · "));
+      }
+      function selectedUnit() {
+        return state.game.units.find((unit) => unit.id === $("unitSelect").value);
+      }
+      async function refreshProductionPanel() {
+        const city = selectedCity();
+        if (!city) return;
+        try {
+          const [productionResponse, catalogResponse, gameResponse] =
+            await Promise.all([
+              fetch(`/api/cities/${encodeURIComponent(city.id)}/production`, {
+                cache: "no-store",
+              }),
+              fetch(
+                `/api/production/catalog?city_id=${encodeURIComponent(city.id)}`,
+                { cache: "no-store" },
+              ),
+              fetch("/api/game", { cache: "no-store" }),
+            ]);
+          if (!productionResponse.ok || !catalogResponse.ok || !gameResponse.ok) {
+            throw new Error("생산 또는 게임 상태를 불러오지 못했습니다.");
+          }
+          const production = await productionResponse.json();
+          const catalog = await catalogResponse.json();
+          state.game = await gameResponse.json();
+          $("productionSummary").textContent =
+            `현재 턴 ${production.turn} · 도시 생산력 ${production.production_per_turn.toFixed(1)}/턴`;
+          const target = $("productionTarget");
+          target.replaceChildren();
+          for (const item of catalog.items) {
+            const option = document.createElement("option");
+            option.value = `${item.category}|${item.id}`;
+            option.textContent = `${item.category} · ${codeLabel(item.id)} · ${item.cost_supported ? `${item.cost} 생산력` : "비용 데이터 없음"}${item.available ? "" : ` · 불가: ${item.unavailable_reason}`}`;
+            option.disabled = !item.available;
+            target.appendChild(option);
+          }
+          const queueRoot = $("productionQueue");
+          queueRoot.replaceChildren();
+          if (!production.queue.length) {
+            queueRoot.textContent = "생산 대기열이 비어 있습니다.";
+          }
+          production.queue.forEach((entry, index) => {
+            const row = document.createElement("div");
+            row.className = "city-entry";
+            const detail = document.createElement("span");
+            const eta =
+              entry.estimated_turns === null
+                ? "완료 예상 미정"
+                : `약 ${entry.estimated_turns}턴`;
+            detail.textContent =
+              `${index === 0 ? "▶ " : ""}${codeLabel(entry.target_id)} · ${entry.progress}/${entry.cost ?? "?"} · 남음 ${entry.remaining ?? "?"} · ${eta}`;
+            row.appendChild(detail);
+            for (const [label, position] of [
+              ["↑", Math.max(0, index - 1)],
+              ["↓", Math.min(production.queue.length - 1, index + 1)],
+            ]) {
+              const move = document.createElement("button");
+              move.type = "button";
+              move.textContent = label;
+              move.disabled = position === index;
+              move.onclick = () =>
+                changeProductionOrder(entry.queue_id, position);
+              row.appendChild(move);
+            }
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.textContent = "취소";
+            remove.onclick = () => removeProduction(entry.queue_id);
+            row.appendChild(remove);
+            queueRoot.appendChild(row);
+          });
+          const units = state.game.units.filter(
+            (unit) => unit.owner_city_id === city.id,
+          );
+          const unitSelect = $("unitSelect");
+          const selectedUnitId = unitSelect.value;
+          unitSelect.replaceChildren();
+          for (const unit of units) {
+            const option = document.createElement("option");
+            option.value = unit.id;
+            option.textContent =
+              `${codeLabel(unit.unit_type)} · (${unit.x}, ${unit.y}) · 이동 ${unit.moves_remaining} · 행동 ${unit.charges_remaining}`;
+            unitSelect.appendChild(option);
+          }
+          if (units.some((unit) => unit.id === selectedUnitId)) {
+            unitSelect.value = selectedUnitId;
+          }
+          const improvementSelect = $("builderImprovement");
+          improvementSelect.replaceChildren();
+          for (const item of state.catalog.improvements) {
+            if (item.raw?.Buildable !== "true") continue;
+            const option = document.createElement("option");
+            option.value = item.id;
+            option.textContent = codeLabel(item.id);
+            improvementSelect.appendChild(option);
+          }
+          syncUnitControls();
+        } catch (error) {
+          $("productionSummary").textContent = error.message;
+          setStatus(`생산 패널 갱신 실패: ${error.message}`);
+        }
+      }
+      async function refreshResearchPanel() {
+        const response = await fetch("/api/research", { cache: "no-store" });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || `연구 정보를 불러오지 못했습니다 (${response.status})`);
+        }
+        const data = await response.json();
+        for (const [category, label] of [
+          ["technology", "기술"],
+          ["civic", "사회제도"],
+        ]) {
+          const select = $(
+            category === "technology" ? "technologySelect" : "civicSelect",
+          );
+          const previous = select.value;
+          const track = data.tracks[category];
+          select.replaceChildren();
+          for (const item of data.options[category]) {
+            const option = document.createElement("option");
+            option.value = item.id;
+            const progress = Number(item.progress || 0);
+            option.textContent =
+              `${codeLabel(item.id)} · ${item.cost_supported ? `${progress}/${item.cost}` : "비용 데이터 없음"}` +
+              `${item.current ? " · 연구 중" : ""}` +
+              `${item.completed ? " · 완료" : item.available ? "" : ` · 불가: ${item.unavailable_reason}`}`;
+            option.disabled = !item.available;
+            select.appendChild(option);
+          }
+          const desired = track.current_id || previous;
+          if (
+            [...select.options].some(
+              (option) => option.value === desired && !option.disabled,
+            )
+          ) {
+            select.value = desired;
+          } else {
+            const firstAvailable = data.options[category].find(
+              (item) => item.available,
+            );
+            if (firstAvailable) select.value = firstAvailable.id;
+          }
+          const button = $(
+            category === "technology"
+              ? "technologyResearchBtn"
+              : "civicResearchBtn",
+          );
+          button.textContent = `${label} 연구 선택`;
+          button.disabled = !select.value;
+        }
+        const tech = data.tracks.technology;
+        const civic = data.tracks.civic;
+        const progressText = (track) =>
+          track.current_id
+            ? `${codeLabel(track.current_id)} ${Number(track.progress).toFixed(1)}/${track.cost} · 남음 ${Number(track.remaining).toFixed(1)}`
+            : "선택 안 됨";
+        $("researchSummary").textContent =
+          `문명 전체 합계 · 과학 ${data.science_per_turn.toFixed(1)}/턴 · 문화 ${data.culture_per_turn.toFixed(1)}/턴 · ` +
+          `기술: ${progressText(tech)} · 사회제도: ${progressText(civic)} · 완료 ${data.technologies.length}개 기술 / ${data.civics.length}개 사회제도`;
+      }
+      async function selectResearch(category) {
+        const select = $(
+          category === "technology" ? "technologySelect" : "civicSelect",
+        );
+        if (!select.value) return;
+        try {
+          await productionRequest(`/api/research/${category}`, "PUT", {
+            target_id: select.value,
+          });
+          await refreshResearchPanel();
+          setStatus(`${codeLabel(select.value)} 연구를 시작했습니다.`);
+        } catch (error) {
+          setStatus(`연구 선택 실패: ${error.message}`);
+        }
+      }
+      function syncUnitControls() {
+        const unit = selectedUnit();
+        $("unitMoveBtn").disabled = !unit || unit.moves_remaining < 1;
+        $("builderBuildBtn").disabled =
+          !unit || unit.unit_type !== "UNIT_BUILDER";
+        $("builderRemoveBtn").disabled =
+          !unit || unit.unit_type !== "UNIT_BUILDER";
+        $("settlerFoundBtn").disabled =
+          !unit || unit.unit_type !== "UNIT_SETTLER";
+        if (!unit) {
+          $("unitStatus").textContent = "이 도시가 보유한 건설자·개척자가 없습니다.";
+          return;
+        }
+        $("unitMoveX").value = unit.x;
+        $("unitMoveY").value = unit.y;
+        $("unitStatus").textContent =
+          `${codeLabel(unit.unit_type)} 위치 (${unit.x}, ${unit.y}) · 남은 이동 ${unit.moves_remaining} · 남은 행동 ${unit.charges_remaining}`;
+      }
+      async function productionRequest(url, method, body) {
+        const response = await fetch(url, {
+          method,
+          headers: body ? { "Content-Type": "application/json" } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || `요청 실패 (${response.status})`);
+        }
+        return response.json();
+      }
+      async function addProduction() {
+        const city = selectedCity();
+        if (!city || !$("productionTarget").value) return;
+        const [category, targetId] = $("productionTarget").value.split("|");
+        const tile = selectedTile();
+        const placement =
+          ["district", "wonder"].includes(category) &&
+          tile?.owner_city_id === city.id
+            ? { x: tile.x, y: tile.y }
+            : {};
+        try {
+          await productionRequest(
+            `/api/cities/${encodeURIComponent(city.id)}/production/queue`,
+            "POST",
+            { category, target_id: targetId, ...placement },
+          );
+          await refreshProductionPanel();
+          setStatus(`${codeLabel(targetId)}을(를) 생산 대기열에 추가했습니다.`);
+        } catch (error) {
+          setStatus(`생산 추가 실패: ${error.message}`);
+        }
+      }
+      async function changeProductionOrder(queueId, position) {
+        const city = selectedCity();
+        if (!city) return;
+        try {
+          await productionRequest(
+            `/api/cities/${encodeURIComponent(city.id)}/production/order`,
+            "PUT",
+            { queue_id: queueId, position },
+          );
+          await refreshProductionPanel();
+        } catch (error) {
+          setStatus(`대기열 변경 실패: ${error.message}`);
+        }
+      }
+      async function removeProduction(queueId) {
+        const city = selectedCity();
+        if (!city) return;
+        try {
+          await productionRequest(
+            `/api/cities/${encodeURIComponent(city.id)}/production/queue/${encodeURIComponent(queueId)}`,
+            "DELETE",
+          );
+          await refreshProductionPanel();
+          setStatus("생산 대기열 항목을 취소했습니다.");
+        } catch (error) {
+          setStatus(`생산 취소 실패: ${error.message}`);
+        }
+      }
+      async function finishTurn() {
+        const button = $("endTurnBtn");
+        if (button.disabled) return;
+        button.disabled = true;
+        try {
+          const result = await productionRequest("/api/turn/end", "POST");
+          state.game = result.game_state;
+          state.map = await (
+            await fetch("/api/map", { cache: "no-store" })
+          ).json();
+          state.cities = await (
+            await fetch("/api/cities", { cache: "no-store" })
+          ).json();
+          renderCities();
+          if (state.cities.some((city) => city.id === state.selectedCityId)) {
+            selectCity(state.selectedCityId);
+          }
+          const completed = result.completed
+            .map((item) => codeLabel(item.id))
+            .join(", ");
+          const completedResearch = (result.completed_research || [])
+            .map((item) => codeLabel(item.id))
+            .join(", ");
+          await refreshResearchPanel();
+          setStatus(
+            [
+              `턴 ${result.turn} 시작`,
+              completed ? `생산 완료: ${completed}` : "",
+              completedResearch ? `연구 완료: ${completedResearch}` : "",
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          );
+        } catch (error) {
+          setStatus(`턴 종료 실패: ${error.message}`);
+        } finally {
+          button.disabled = false;
+        }
+      }
+      async function performUnitAction(path, body) {
+        const unit = selectedUnit();
+        if (!unit) return;
+        try {
+          await productionRequest(
+            `/api/units/${encodeURIComponent(unit.id)}/${path}`,
+            "POST",
+            body,
+          );
+          state.map = await (
+            await fetch("/api/map", { cache: "no-store" })
+          ).json();
+          await refreshProductionPanel();
+          drawMap();
+          setStatus("유닛 행동을 적용했습니다.");
+        } catch (error) {
+          setStatus(`유닛 행동 실패: ${error.message}`);
+        }
+      }
+      async function foundCityWithSettler() {
+        const unit = selectedUnit();
+        if (!unit) return;
+        try {
+          const result = await productionRequest(
+            `/api/units/${encodeURIComponent(unit.id)}/found-city`,
+            "POST",
+            { name: $("settlerCityName").value.trim() || "New City" },
+          );
+          state.map = await (
+            await fetch("/api/map", { cache: "no-store" })
+          ).json();
+          state.cities = await (
+            await fetch("/api/cities", { cache: "no-store" })
+          ).json();
+          state.game = await (
+            await fetch("/api/game", { cache: "no-store" })
+          ).json();
+          renderCities();
+          selectCity(result.city.id);
+          setStatus(`개척자가 ${result.city.name} 도시를 건설하고 소모되었습니다.`);
+        } catch (error) {
+          setStatus(`도시 건설 실패: ${error.message}`);
+        }
+      }
+      async function saveMap() {
+        try {
+          const response = await fetch("/api/map/save", { method: "POST" });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            setStatus(error.detail || `지도 저장 실패 (${response.status})`);
+            return;
+          }
+          setStatus("현재 지도와 도시를 서버에 저장했습니다.");
+        } catch (error) {
+          setStatus(`지도 저장 요청 실패: ${error.message}`);
+        }
+      }
+      async function saveMapAs() {
+        const input = $("saveMapName");
+        input.value = "";
+        if ((await waitForDialog($("saveMapAsDialog"))) !== "save") return;
+        const name = input.value.trim();
+        if (!name) {
+          setStatus("저장할 파일 이름을 입력하세요.");
+          return;
+        }
+        try {
+          const response = await fetch("/api/maps/save-as", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            setStatus(error.detail || `다른 이름으로 저장 실패 (${response.status})`);
+            return;
+          }
+          const result = await response.json();
+          setStatus(`"${result.name}.json" 저장 완료 (app/data/saved_maps)`);
+        } catch (error) {
+          setStatus(`다른 이름으로 저장 요청 실패: ${error.message}`);
+        }
+      }
+      async function loadSavedMap() {
+        let savedMaps;
+        try {
+          const listResponse = await fetch("/api/maps/saved", {
+            cache: "no-store",
+          });
+          if (!listResponse.ok) {
+            setStatus(`저장본 목록을 불러오지 못했습니다 (${listResponse.status})`);
+            return;
+          }
+          savedMaps = (await listResponse.json()).maps;
+        } catch (error) {
+          setStatus(`저장본 목록을 불러오지 못했습니다: ${error.message}`);
+          return;
+        }
+        const select = $("savedMapList");
+        select.replaceChildren();
+        for (const name of savedMaps) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = `${name}.json`;
+          select.appendChild(option);
+        }
+        if (!savedMaps.length) {
+          setStatus("불러올 저장본이 없습니다.");
+          return;
+        }
+        if ((await waitForDialog($("loadSavedMapDialog"))) !== "load") return;
+        let result;
+        try {
+          const response = await fetch("/api/maps/load", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: select.value }),
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            setStatus(error.detail || `저장본 불러오기 실패 (${response.status})`);
+            return;
+          }
+          result = await response.json();
+        } catch (error) {
+          setStatus(`저장본 불러오기 요청 실패: ${error.message}`);
+          return;
+        }
+        state.map = result.map;
+        state.cities = result.cities;
+        state.game = result.game_state || { turn: 1, units: [] };
+        state.selectedCityId = null;
+        state.selectedTile = {
+          x: Math.floor(state.map.width / 2),
+          y: Math.floor(state.map.height / 2),
+        };
+        setOptions(
+          "terrain",
+          [...new Set(state.map.tiles.map((tile) => tile.terrain))].map(
+            (id) => ({ id, label: codeLabel(id) }),
+          ),
+          "지형 선택",
+        );
+        $("mapTitle").textContent =
+          `지도 ${state.map.width} × ${state.map.height} · 타일 ${state.map.count.toLocaleString()}개`;
+        $("audit").textContent =
+          `Loaded saved map · ${state.map.width} × ${state.map.height} · ${state.map.count} tiles`;
+        $("metrics").replaceChildren();
+        $("yieldBreakdown").replaceChildren();
+        renderCities();
+        syncTileEditor();
+        drawMap();
+        fitMap();
+        await refreshResearchPanel();
+        if (state.cities.length) selectCity(state.cities[0].id);
+        else {
+          $("cityEditor").classList.add("hidden");
+          $("citySummary").textContent = "도시를 선택하거나 생성하세요.";
+        }
+        setStatus("저장한 지도와 도시 데이터를 불러왔습니다.");
+      }
+      function makeChecks(containerId, items, attr, searchId, limit = 250) {
+        const root = $(containerId);
+        const search = $(searchId);
+        function render() {
+          root.innerHTML = "";
+          const q = search.value.toLowerCase();
+          for (const item of items
+            .filter((i) =>
+              (i.id + " " + itemLabel(i)).toLowerCase().includes(q),
+            )
+            .slice(0, limit)) {
+            const label = document.createElement("label");
+            label.className = "check-item";
+            const cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.dataset[attr] = item.id;
+            const span = document.createElement("span");
+            span.textContent = itemLabel(item);
+            span.title = item.id;
+            label.append(cb, span);
+            root.appendChild(label);
+          }
+          const c = selectedCity();
+          if (c) {
+            const selected = new Set(
+              attr === "building"
+                ? [...(c.buildings || []), ...(c.wonders || [])]
+                : c.policies || [],
+            );
+            root
+              .querySelectorAll(`[data-${attr}]`)
+              .forEach((x) => (x.checked = selected.has(x.dataset[attr])));
+          }
+        }
+        search.addEventListener("input", render);
+        render();
+      }
+      async function init() {
+        const [hr, mr, cr, cir, rr] = await Promise.all([
+          fetch("/health", { cache: "no-store" }),
+          fetch("/api/map", { cache: "no-store" }),
+          fetch("/api/catalog", { cache: "no-store" }),
+          fetch("/api/cities", { cache: "no-store" }),
+          fetch("/api/game-rules", { cache: "no-store" }),
+        ]);
+        const health = await hr.json();
+        if (!rr.ok) {
+          const error = await rr.json().catch(() => ({}));
+          throw new Error(error.detail || `게임 규칙을 불러오지 못했습니다 (${rr.status})`);
+        }
+        if (health.version !== "0.3.0") {
+          throw new Error(
+            "다른 버전의 서버가 실행 중입니다. 기대 버전 0.3.0 / 현재 " +
+              health.version,
+          );
+        }
+        state.map = await mr.json();
+        state.catalog = await cr.json();
+        state.cities = await cir.json();
+        state.rules = await rr.json();
+        $("population").max = state.rules.city.maximum_population;
+        $("population").value = state.rules.city.initial_population;
+        $("cityTerritoryRules").textContent =
+          `새 도시는 중심에서 반경 ${state.rules.city.initial_territory_radius}타일을 소유합니다. ` +
+          `최소 도시 간 거리는 ${state.rules.city.minimum_distance}타일입니다. ` +
+          "문화력 자동 확장은 없으며, 선택한 타일을 직접 지정합니다.";
+        $("mapTitle").textContent =
+          `지도 ${state.map.width} × ${state.map.height} · 타일 ${state.map.count.toLocaleString()}개`;
+        const terrains = [
+          ...new Set(state.map.tiles.map((t) => t.terrain)),
+        ].map((id) => ({ id, label: codeLabel(id) }));
+        const features = [
+          ...new Set(state.map.tiles.map((t) => t.feature).filter(Boolean)),
+        ].map((id) => ({ id, label: codeLabel(id) }));
+        const resources = [
+          ...new Set(state.map.tiles.map((t) => t.resource).filter(Boolean)),
+        ].map((id) => ({ id, label: codeLabel(id) }));
+        setOptions("terrain", terrains, "지형 선택");
+        setOptions(
+          "feature",
+          state.catalog.features.length ? state.catalog.features : features,
+        );
+        setOptions(
+          "resource",
+          state.catalog.resources.length ? state.catalog.resources : resources,
+        );
+        setOptions("improvement", state.catalog.improvements);
+        setOptions("district", state.catalog.districts);
+        const civRows =
+          state.catalog.raw_tables?.["Civilizations::Civilizations"] || [];
+        setOptions(
+          "civilization",
+          civRows.map((r) => ({
+            id: r.CivilizationType,
+            label: codeLabel(r.CivilizationType),
+          })),
+        );
+        setOptions("leader", state.catalog.leaders);
+        makeChecks(
+          "buildingList",
+          state.catalog.buildings,
+          "building",
+          "buildingSearch",
+        );
+        makeChecks(
+          "policyList",
+          state.catalog.policies,
+          "policy",
+          "policySearch",
+        );
+        $("audit").innerHTML =
+          `Source: ${state.map.source}<br>Map size: ${state.map.width} × ${state.map.height}<br>Tiles: ${state.map.count}<br>Catalog XML files: ${state.catalog.stats.xml_files}<br>Catalog tables: ${state.catalog.stats.tables}<br>Catalog rows: ${state.catalog.stats.rows}<br>Building definitions: ${state.catalog.buildings.length}<br>District definitions: ${state.catalog.districts.length}<br>Policy definitions: ${state.catalog.policies.length}<br><br>Tile options are generated from values present on the imported map and extracted catalog. Display names are derived from IDs; full Korean localization is not loaded.`;
+        state.selectedTile = {
+          x: Math.floor(state.map.width / 2),
+          y: Math.floor(state.map.height / 2),
+        };
+        syncTileEditor();
+        renderCities();
+        resizeCanvas();
+        fitMap();
+        await refreshResearchPanel();
+        if (state.cities.length) selectCity(state.cities[0].id);
+        setStatus("MAP EDITOR v0.3.0 · 지도와 카탈로그 로드 완료");
+      }
+      [
+        "terrain",
+        "feature",
+        "resource",
+        "improvement",
+        "district",
+        "worked",
+        "river",
+        "hillOverride",
+      ].forEach((id) => $(id).addEventListener("change", () => {}));
+      $("applyTile").onclick = applyTile;
+      $("toggleTileOwnershipBtn").onclick = toggleTileOwnership;
+      $("newCityBtn").onclick = createCity;
+      $("saveCityBtn").onclick = saveCity;
+      $("productionAddBtn").onclick = addProduction;
+      $("endTurnBtn").onclick = finishTurn;
+      $("technologyResearchBtn").onclick = () =>
+        selectResearch("technology");
+      $("civicResearchBtn").onclick = () => selectResearch("civic");
+      $("unitSelect").onchange = syncUnitControls;
+      $("unitMoveBtn").onclick = () =>
+        performUnitAction("move", {
+          x: Number($("unitMoveX").value),
+          y: Number($("unitMoveY").value),
+        });
+      $("builderBuildBtn").onclick = () =>
+        performUnitAction("build", {
+          improvement_id: $("builderImprovement").value,
+        });
+      $("builderRemoveBtn").onclick = () =>
+        performUnitAction("remove-feature", {});
+      $("settlerFoundBtn").onclick = foundCityWithSettler;
+      $("deleteCityBtn").onclick = deleteCity;
+      $("saveMapBtn").onclick = saveMap;
+      $("saveMapAsBtn").onclick = saveMapAs;
+      $("loadSavedMapBtn").onclick = loadSavedMap;
+      $("zoomIn").onclick = () =>
+        zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1.25);
+      $("zoomOut").onclick = () =>
+        zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1 / 1.25);
+      $("resetView").onclick = fitMap;
+      $("toggleLabels").onclick = () => {
+        state.showCoords = !state.showCoords;
+        drawMap();
+      };
+      window.addEventListener("resize", resizeCanvas);
+      init().catch((e) => setStatus("초기화 실패: " + e.message));
+    </script>
+  </body>
+</html>
