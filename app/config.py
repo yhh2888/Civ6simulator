@@ -9,6 +9,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from app.core.game_speed import GAME_SPEEDS
+
 YIELD_KEYS = ("Food", "Production", "Gold", "Science", "Culture", "Faith")
 
 
@@ -134,22 +136,100 @@ _OPTIONAL_SECTIONS = {
         "overrides": {},
     },
 }
+_OPTIONAL_RULES = {
+    "food": {
+        "food_per_population": 2.0,
+        "max_growths_per_turn": 1,
+    },
+    "game_speed": "STANDARD",
+}
+
+
+_SIMULATION_BOOLEANS = {
+    "apply_modifiers", "apply_amenity_effects", "apply_housing_growth_penalty",
+    "apply_game_speed_costs", "apply_cost_progression", "resource_visibility_requires_tech",
+    "starvation_pop_loss",
+}
+_SIMULATION_CHOICES = {
+    "population_yields_source": ("config", "global_parameters"),
+    "luxury_amenities": ("auto", "off"),
+    "overflow_policy": ("carry_to_next", "same_turn_queue", "stop_at_item"),
+    "research_overflow": ("carry", "discard"),
+    "default_citizen_mode": ("manual", "auto"),
+    "default_strategy": ("balanced", "food", "production", "gold", "science", "culture",
+                         "faith", "growth", "build", "custom"),
+    "default_new_citizen_policy": ("auto", "manual"),
+}
+
+
+def _validate_simulation(section: Any, path: Path) -> None:
+    allowed = _SIMULATION_BOOLEANS | set(_SIMULATION_CHOICES) | {"max_simulation_turns"}
+    _object(section, path, "simulation", allowed, set())
+    for key in _SIMULATION_BOOLEANS & set(section):
+        if not isinstance(section[key], bool):
+            _fail(path, f"simulation.{key} must be true or false.")
+    for key, choices in _SIMULATION_CHOICES.items():
+        if key in section and section[key] not in choices:
+            _fail(path, f"simulation.{key} must be one of {', '.join(choices)}.")
+    if "max_simulation_turns" in section:
+        _integer(section["max_simulation_turns"], path, "simulation.max_simulation_turns", 1)
 
 
 def validate_game_rules(rules: Any, path: Path) -> dict:
     if not isinstance(rules, dict):
         _fail(path, "Top-level value must be a JSON object.")
+    for key, default in _OPTIONAL_RULES.items():
+        rules.setdefault(key, deepcopy(default))
     allowed_top = {
+        "simulation",
         "schema_version",
         "city",
         "production",
         "tile_yields",
         "tile_yield_modifiers",
         *_OPTIONAL_SECTIONS,
+        *_OPTIONAL_RULES,
     }
-    _object(rules, path, "top-level rules", allowed_top, allowed_top - set(_OPTIONAL_SECTIONS))
+    _object(
+        rules,
+        path,
+        "top-level rules",
+        allowed_top,
+        allowed_top - set(_OPTIONAL_SECTIONS) - set(_OPTIONAL_RULES) - {"simulation"},
+    )
+    if "simulation" in rules:
+        _validate_simulation(rules["simulation"], path)
     if rules["schema_version"] != 2 or isinstance(rules["schema_version"], bool):
         _fail(path, "schema_version must be 2.")
+    if (
+        not isinstance(rules["game_speed"], str)
+        or rules["game_speed"] not in GAME_SPEEDS
+    ):
+        _fail(
+            path,
+            "game_speed must be one of "
+            + ", ".join(sorted(GAME_SPEEDS))
+            + ".",
+        )
+    food_rules = _object(
+        rules["food"],
+        path,
+        "food",
+        {"food_per_population", "max_growths_per_turn"},
+        {"food_per_population", "max_growths_per_turn"},
+    )
+    _finite_number(
+        food_rules["food_per_population"],
+        path,
+        "food.food_per_population",
+    )
+    if food_rules["food_per_population"] < 0:
+        _fail(path, "food.food_per_population must be non-negative.")
+    _integer(
+        food_rules["max_growths_per_turn"],
+        path,
+        "food.max_growths_per_turn",
+    )
 
     city_fields = {
         "minimum_distance",

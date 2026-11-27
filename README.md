@@ -1,143 +1,72 @@
-# Civ VI City Studio — Map Editor Prototype v0.3.0
+# Civ VI City Studio
 
-## What's included
-- Uses the map CSV from the uploaded `civ6reader.zip`.
-- Loads a real map grid of 84 x 54 (4,536 tiles).
-- Canvas map with click selection, drag-to-pan, wheel zoom, zoom buttons and coordinate labels.
-- Hover a tile to see its own yield, including whether it is currently worked or a preview.
-- Visible `MAP EDITOR v0.3.0` badge and `/health` version check to catch old-server confusion.
-- No-cache response headers for the main HTML.
-- City center markers display the actual population.
-- Cities must be at least 3 hexes apart; a new city starts owning its center and all existing adjacent tiles.
-- Owned tiles are highlighted on the map and can be claimed or released manually from the selected city's panel. Claims must connect to that city's existing territory; city centers cannot be unclaimed.
-- Culture-based automatic border growth is not simulated.
-- Fit-to-map scale is computed from the real canvas dimensions.
-- Pointy-top hex rendering uses the unchanged odd-row map coordinates; click hit-testing, fit, drag and cursor-centered zoom use the same geometry.
-- Create a city on the selected tile; new cities start at population 1.
-- Edit city name, population, housing, amenities, civilization, leader, governor ID, governor promotions, buildings/wonders, policies and notes.
-- Edit selected tile terrain, feature, resource, improvement, district, worked status, river flag and hill override metadata.
-- Persist city/map edits in local JSON files.
-- Save the current map, create a non-overwriting named snapshot in `app/data/saved_maps`, and reload a validated snapshot.
-- Delete cities from the selected city panel or city list; owned tiles and citizen work state are cleared.
-- Calculates a rule-limited city yield total and itemized tile/district/building breakdown from the imported catalog.
-- Loads frequently tuned gameplay settings and declared modifiers from `app/data/game_rules.json`.
-- Queue XML-cost production for Builders, Settlers, buildings, districts and wonders; end turns to apply city Production.
-- Move produced units, let Builders construct catalog-valid improvements/remove eligible features, and found cities with Settlers.
+문명 6 도시 하나하나를 턴 단위로 계산해 보는 시뮬레이터입니다. 세이브 파일을 열면 지도, 도시, 시민 배치, 생산 대기열, 기술과 정책, 도시국가 사절, 교역로까지 그대로 가져오고, 다음 몇 턴 동안 도시가 어떻게 자라는지 계산합니다. 숫자가 왜 그렇게 나왔는지는 도시 장부에 한 줄씩 남습니다. 어느 XML 행에서 왔는지, 어떤 정책이 몇 퍼센트를 더했는지까지요.
 
-## Run (Windows PowerShell)
+알렉산드리아(90턴, 몰려드는 폭풍) 기준으로 게임 툴팁의 생산력 27을 항목별로 맞춰 놓았습니다. 타일 12, 산업구역 6, 건물 5, 수출 교역로 3, 도시국가 보너스 1.
+
+현재 버전: **0.5.1**
+
+> 비공식 팬 도구입니다. Firaxis Games, 2K와 관계가 없습니다. 게임 데이터는 포함하지 않으며, 처음 실행할 때 내 PC에 설치된 게임에서 읽어 옵니다.
+
+## 시작하기
+
+### 한국어
+
+1. 압축을 풀고 `run_windows.bat`을 더블클릭합니다. 처음에는 가상환경을 만들고 패키지를 설치하느라 1~2분 걸리고, 그다음부터는 3~4초 안에 브라우저가 열립니다.
+2. 처음 열면 지도 대신 **게임 데이터 준비** 화면이 나옵니다. 둘 중 하나를 고르세요.
+   - **게임 폴더를 바로 지정:** 경로 칸에 문명 6 설치 폴더를 넣고 [추출]을 누릅니다. 예: `C:\Program Files (x86)\Steam\steamapps\common\Sid Meier's Civilization VI`. Steam 기본 위치에 있으면 화면에 미리 나타납니다.
+   - **`collect_game_data.bat` 사용:** 게임 폴더에서 `Base\Assets\Gameplay\Data`와 `DLC`의 규칙 파일(XML, SQL, modinfo)만 골라 프로젝트의 `game_data` 폴더로 복사합니다. 그림과 소리는 복사하지 않습니다. 끝나면 경로 칸에 `game_data` 폴더를 넣고 [추출]을 누릅니다. 게임 폴더를 다른 PC로 옮겨 쓰거나, 설치 폴더를 직접 건드리고 싶지 않을 때 편합니다.
+3. 추출은 몇 초에서 1분 정도 걸립니다. 기본 게임 규칙(`catalog.json`, `rules_db.json`)과, DLC 폴더가 있으면 확장팩·DLC 규칙(`rules_db_xp2.json`)이 `app\data`에 만들어지고 화면이 다시 열립니다.
+4. 오른쪽 위 [세이브 가져오기]로 `.Civ6Save` 파일을 엽니다. 세이브는 보통 `문서\My Games\Sid Meier's Civilization VI\Saves`에 있습니다.
+
+### English
+
+1. Unzip and double-click `run_windows.bat`. The first run creates a virtual environment and installs packages (a minute or two); after that the browser opens within 3 to 4 seconds.
+2. The first page is **Game data setup**, not the map. Pick one:
+   - **Point at the game folder:** enter your Civilization VI install folder and press Extract, e.g. `C:\Program Files (x86)\Steam\steamapps\common\Sid Meier's Civilization VI`. Default Steam locations are offered automatically.
+   - **Use `collect_game_data.bat`:** it copies only the rule files (XML, SQL, modinfo) of `Base\Assets\Gameplay\Data` and `DLC` into the project's `game_data` folder, no art or audio. Then enter `game_data` and press Extract.
+3. Extraction takes a few seconds to about a minute. It writes the base rules (`catalog.json`, `rules_db.json`) and, when a DLC folder is present, the expansion and DLC rules (`rules_db_xp2.json`) into `app\data`, then reloads the page.
+4. Open a `.Civ6Save` with Import save (top right). Saves are usually in `Documents\My Games\Sid Meier's Civilization VI\Saves`.
+
+Command line, if you prefer:
+
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
-```
-Open **http://127.0.0.1:8010**. API docs: http://127.0.0.1:8010/docs.
-
-**Recommended:** double-click `run_windows.bat`; it always changes into this project folder and uses port `8010` so it does not silently reuse an older server on port `8000`. The header must show `MAP EDITOR v0.3.0`. You can verify the server at http://127.0.0.1:8010/health; it must return version `0.3.0`. If the version differs, you are talking to another project/server.
-
-If venv activation is blocked:
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+python tools/build_catalog.py  "<Civ VI>\Base\Assets\Gameplay\Data"
+python tools/build_rules_db.py "<Civ VI>\Base\Assets\Gameplay\Data"
+python tools/build_ruleset_db.py --base "<Civ VI>\Base\Assets\Gameplay\Data" --dlc "<Civ VI>\DLC"
 ```
 
-## Yield calculation coverage
+## 무엇을 하나
 
-`POST /api/calculate/{city_id}` uses extracted XML yield records where present:
+- **세이브 가져오기.** 지형, 강, 도시와 특수지구, 시민 배치와 잠금, 현재 생산과 진행도, 연구한 기술과 사회제도, 정부와 정책, 판테온, 도시국가 사절과 종주국, 상인의 교역로를 읽습니다. 같은 세이브의 다른 문명으로 바꿔서 볼 수도 있습니다.
+- **산출 계산.** 지형부터 인접 보너스, 건물, 정책과 특성, 도시국가 보너스, 교역로, 걸작까지 게임 데이터의 Modifier와 Requirement를 그대로 해석합니다.
+- **도시 장부.** 모든 줄에 계산식과 출처가 붙고, 장부 합계와 도시 화면 숫자가 맞는지 매번 검산합니다. 교역로는 교역로마다 따로 장부가 있습니다.
+- **턴 시뮬레이션.** 성장, 주거공간, 쾌적도, 생산 대기열과 초과분, 연구를 정해진 순서로 처리합니다. 시나리오를 복사해 서로 비교할 수 있습니다.
+- **지도.** 타일마다 지형, 시설, 산출을 바로 보여 주고, 특수지구에는 인접 보너스와 지어진 건물이 함께 나옵니다.
 
-- Base terrain and hill yields, features, resource yield changes and improvements.
-- The imported map CSV has no separate hill column: hill status is encoded in terrain IDs ending in `_HILLS`. The app map retains those terrain IDs, displays a ridge marker, and exposes the effective hill state in tile yield details. `IsRiver` in that CSV is a river flag, not a hill flag.
-- City-center minimum of 2 Food and 1 Production.
-- Configured flat population yields: 0.5 Science and 0.2 Culture per citizen, added to city totals and empire research.
-- Only owned tiles are included; the center is always worked, with up to one additional worked tile per population citizen (total capacity: population + 1 tiles).
-- XML district citizen yields and a supported subset of district adjacency rules.
-- Direct building and wonder yield changes, with duplicate building IDs counted once.
-- Six outputs: Food, Production, Gold, Science, Culture and Faith, with tile-level components, totals and rule coverage returned.
+아직 못 하는 것도 있습니다. 총독, 위인 점수, 강 범람으로 늘어난 타일 산출, 걸작이 걸린 위치, 충성도는 세이브에서 읽지 못하거나 계산하지 않습니다. 화면의 "계산 근거·미지원 규칙" 탭에 빠진 규칙이 전부 기록됩니다.
 
-The result is an approximation, not an in-game simulation. The population Science/Culture values are configurable flat yields requested for this project; the similarly named percentage parameters found in the extracted game data are not implemented as percentage modifiers. Food consumption, city growth and starvation are not simulated. Hills use extracted XML yields for the matching terrain ID when available; a manual hill override adjusts direct Production by one when the XML terrain variant is unavailable or overridden. River adjacency is reported as context but does not add yields. Dynamic resource/improvement conditions, unsupported adjacency modifiers, policies, governors, civilization/leader abilities, technology/civic boosts, era/game-speed modifiers, religion, trade routes, all DLC data, and complete localization are not modeled.
+## 버전 기록
 
-## Editing gameplay rules
+### 0.1 ~ 0.4
 
-Edit `app/data/game_rules.json`; `app/config.py` only loads and validates this file. `GET /api/game-rules` returns the active validated settings. The server reads the JSON on each rules-dependent request, so save the file and reload the browser; a server restart is not normally required. A missing, malformed, or unsupported rules file returns an explicit HTTP 500 error instead of silently using defaults.
+0.3까지는 지도 위에 도시를 놓고 시민을 손으로 배치하는 편집기였습니다. 산출은 지형과 건물의 기본값 정도만 더했고, 정책이나 정부는 저장만 할 뿐 계산에 들어가지 않았습니다.
 
-The JSON groups rules by purpose:
+0.4에서 계산 엔진을 새로 만들었습니다. 게임의 Modifier, Requirement, 성장 공식, 생산 대기열을 해석하고, 시민 배치 최적화와 시나리오 비교, 검산되는 도시 장부가 들어갔습니다. 0.4 후반에는 세이브 파일 해독에 집중했습니다. 지도와 도시에서 시작해 시민 배치, 생산, 기술과 정책, 사절, 판테온, 교역로 순으로 읽을 수 있는 범위를 넓혔고, 확장팩과 DLC 규칙을 게임이 불러오는 순서 그대로 합치는 빌더를 만들었습니다. 이 시기 번호는 작업 한 번마다 하나씩 올렸습니다.
 
-- `city`: minimum center-to-center distance in hexes, initial population, initial territory radius in hexes, maximum population, additional worked tiles per population citizen, center minimum yields, and `population_yields` (flat yield points per citizen, currently `Science: 0.5` and `Culture: 0.2`). The center is always one worked tile; total worker capacity is `1 + population * worked_tiles_per_population`.
-- `production`: initial progress in production points, per-category `cost_overrides`, and overflow policy. XML `Cost` is used unless an explicit JSON override exists. `same_turn_queue` carries remaining production into later queue items; `stop_at_item` discards the remainder after completing the current item.
-- `tile_yields`: fallback terrain yields used only when the XML catalog lacks that terrain, plus the production delta for a hill fallback/manual hill toggle.
-- `districts`: `default_max_per_city` is the fallback cap when a per-district override is absent; `overrides` configures entity-specific placement/prerequisite rules.
-- `buildings`: `overrides` configures entity-specific prerequisite rules.
-- `units`: `default_build_charges` and `default_base_moves` apply only when the XML row has no corresponding value; per-unit `overrides` can set prerequisites, population restrictions/cost, and unit values.
-- `improvements`: `default_build_charges` applies when no per-improvement override is present; `feature_removal_charge_cost` sets the charge cost for XML-eligible feature removal. Per-improvement `overrides` configure placement prerequisites and action charge cost.
-- `tile_yield_modifiers`: additive rules with unique `id`, optional `description`/`enabled`, all-required `when` conditions, and `yield_changes`. Values are points per tile. For example:
+### 0.5
 
-```json
-{
-  "id": "worked-hills-production",
-  "description": "Additional Production on worked hills",
-  "enabled": true,
-  "when": {"is_hills": true, "worked": true},
-  "yield_changes": {"Production": 1}
-}
-```
+0.5부터 버전을 정리해서 붙입니다. 기능 묶음이 바뀌면 둘째 자리, 보정과 수정은 셋째 자리를 올립니다.
 
-Supported conditions are `terrain`, `terrain_contains`, `feature`, `resource`, `improvement`, `district`, `worked`, `city_center`, `is_hills`, and `river_adjacent`. Exact-value conditions also accept a list, meaning any listed value matches. Additive rules apply once per tile after XML terrain/feature/resource/improvement/district-citizen yields and before the city-center minimum floor. Non-worked tiles can display the modifier result but do not contribute to city totals. The response records each modifier's `before_yields`, `changes`, and `after_yields`; these details are included in the city breakdown and tile hover tooltip.
-- `districts.overrides`: optional per-district `allowed_terrains`, technology/civic prerequisite overrides, and `max_per_city`.
-- `buildings.overrides`: optional per-building technology/civic/district prerequisite overrides and additional `required_buildings`.
-- `units.overrides`: optional technology/civic prerequisite overrides, `min_population`, `build_charges`, `base_moves`, and `population_cost`.
-- `improvements.overrides`: optional `allowed_terrains`, `allowed_features`, `allowed_resources`, technology/civic prerequisites, and builder charge cost (`build_charges`).
+그리고 게임 데이터를 다시 배포하던 문제를 고쳤습니다. 0.4까지는 게임 XML에서 만든 규칙 파일(`catalog.json`, `rules_db.json`, `rules_db_xp2.json`)을 저장소와 배포 파일에 그대로 넣었습니다. 0.5부터는 이 파일들을 빼고, 사용자의 설치본에서 처음 실행할 때 만듭니다.
 
-Catalog precedence: extracted XML remains the source for costs, prerequisites, placement conditions, and unit values unless a matching JSON override is explicitly present. JSON values replace the matching XML field; they are not copied into the rules file by default. For improvements, an absent condition list falls back to XML, while a present list replaces that condition category. Costs are overridden under `production.cost_overrides`, grouped by production category and game entity ID.
+**0.5.1**
 
-The loader validates the schema, supported fields, types, unique modifier IDs, and yield keys. Error messages include the modifier/entity ID when available. Adding a new condition kind still requires code support in `app/config.py` and the simulation; JSON only combines existing conditions. This configuration layer is not a general Civilization VI Modifier/RequirementSet interpreter: modifier arguments, complex requirement sets, game-speed modifiers, policies, governors, civilization/leader abilities, and turn-triggered effects remain unsupported unless separately implemented.
-
-`GET /api/tiles/{x}/{y}/yields` returns the hovered tile's own terrain, feature, resource, improvement and worked-district yields. Owned tiles use the owning city's current work state; other tiles show a worked-tile preview without city-center minimums. City-wide, building and district-adjacency bonuses are excluded from this tile-only view.
-
-## Important limitations
-- This is an editor prototype, not a complete Civilization VI rules simulator.
-- Map is loaded from the supplied CSV; map data may be from a specific save/game state and is not a procedural map generator.
-- The map editor's tile terrain options are based on values present on the imported map. Feature/resource/improvement options are from the extracted catalog.
-- The yield API uses hex distance for selected district adjacency conditions. Territory ownership is stored separately: new cities claim their radius-1 area, and later expansion is manual rather than culture-driven.
-- The uploaded XML archive does not guarantee full DLC or Korean localization coverage. Labels are derived from identifiers, and localization keys remain in the source catalog.
-- City and map data are stored in `app/data/cities.json` and `app/data/map.json`; back them up before replacing files.
-- Named map snapshots are stored in `app/data/saved_maps/`. Saving with an existing name is rejected; loading a snapshot replaces the current map and city JSON files after validation.
-- Production state is stored with each city in `app/data/cities.json`; turn number and unit instances are stored in `app/data/game_state.json`. Snapshots include both.
-- State-changing endpoints are serialized within the single server process. The default local Uvicorn setup is supported; multi-worker deployment needs a shared database or cross-process lock.
-- Production costs use extracted base XML `Cost` unless `production.cost_overrides` explicitly overrides them. Cost progression models, game speed, technologies/policies/civilization cost modifiers and production discounts are not simulated.
-- Technology and civic research are empire-wide: each turn the active technology receives the sum of all cities' Science, and the active civic receives the sum of all cities' Culture. Costs and prerequisite edges come from the extracted XML catalog. Research progress is saved in `app/data/game_state.json`; existing per-city technology/civic selections are treated as already unlocked for backwards compatibility. Only one item per track can be active; excess yields after completing it are discarded, and boosts, eurekas, inspirations, policy effects and game-speed cost changes are not modeled.
-- Turn overflow follows `production.overflow_policy`; cities are processed from their saved JSON order. This is a defined editor policy, not a claim of full game simulation.
-- Unit support is limited to Builders and Settlers. Movement is one adjacent hex per movement point, without terrain costs, embarkation, combat or pathfinding; effective XML or JSON `BaseMoves` is restored at turn end.
-- Some structural rules remain fixed: a city center always counts as one worked tile, city population cannot fall below one, and movement is limited to one adjacent hex per movement point. Unit movement range, fallback unit action values, district default cap, and Builder charge costs are configurable as described above.
-- Builder improvement legality uses available XML build-unit, terrain, feature, resource and technology conditions, with optional overrides in `game_rules.json`. Missing condition tables cannot be inferred. Eligible feature removal uses extracted removal data and the configured charge cost.
-- Completed districts and buildings affect yields; queued/incomplete work does not. District placement checks ownership, terrain rows when present, and occupied/reserved tiles. Building checks include extracted technology/civic, district and building prerequisites. Some district population caps and placement/prerequisite rules are not available or simulated.
-- Wonders are separately recorded, require a valid owned placement tile and extracted terrain/feature constraints when present, and honor XML world/player instance limits where present. Full wonder-specific placement and game-state restrictions are not modeled.
-- Settler founding checks XML `FoundCity`, map bounds, water terrain when the XML row is available, city spacing, city-center occupancy and radius-1 tile ownership. It consumes the Settler and initializes a population-1 city. City placement's full terrain, strategic-resource, loyalty and diplomatic rules are not modeled.
-- Run focused backend regression tests with `.\.venv\Scripts\python.exe -m unittest discover -s tests`.
-
-## Relevant API
-
-- `POST /api/map/save` — persist the current map and city files.
-- `POST /api/maps/save-as` with `{"name":"My Map"}` — create a validated `.json` snapshot; existing names are not overwritten.
-- `GET /api/maps/saved` — list snapshots.
-- `POST /api/maps/load` with `{"name":"My Map"}` — validate and load a snapshot into the active map and city files.
-- `DELETE /api/cities/{city_id}` — delete a city and clear its tile owners/work states.
-- `POST /api/calculate/{city_id}` — return calculated totals and calculation breakdown.
-- `GET /api/game-rules` — return the validated gameplay rules currently used by simulation.
-- `GET /api/tiles/{x}/{y}/yields` — return the selected tile's own yields for the hover tooltip; unknown coordinates return `404`.
-- `GET /api/game` — return the current turn and saved unit instances.
-- `GET /api/research` — return empire-wide technology/civic research choices, prerequisites, progress, completed unlocks, and summed Science/Culture per turn.
-- `PUT /api/research/{category}` — select `technology` or `civic` research; body: `{"target_id":"TECH_MINING"}` or a civic ID. XML prerequisites must already be completed.
-- `GET /api/production/catalog?city_id={city_id}` — list XML-derived production options, costs and city-specific availability reasons.
-- `GET /api/cities/{city_id}/production` — return production per turn, queue progress, remaining costs, estimated turns and cost caveats.
-- `POST /api/cities/{city_id}/production/queue` — append a production target. Body: `{"category":"unit","target_id":"UNIT_BUILDER"}`. Districts and wonders also require placement coordinates, e.g. `{"category":"district","target_id":"DISTRICT_CAMPUS","x":12,"y":8}`.
-- `PUT /api/cities/{city_id}/production/order` — move a queue item; body: `{"queue_id":"prod-…","position":0}`. Position zero becomes the active production.
-- `DELETE /api/cities/{city_id}/production/queue/{queue_id}` — cancel an item and discard its accumulated progress.
-- `POST /api/turn/end` — apply each city's current calculated Production, complete eligible items, carry overflow forward through that city's queue, advance the turn and refresh unit movement.
-- `POST /api/units/{unit_id}/move` — move one adjacent hex; body: `{"x":12,"y":8}`.
-- `POST /api/units/{unit_id}/build` — construct a valid improvement; body: `{"improvement_id":"IMPROVEMENT_FARM"}`.
-- `POST /api/units/{unit_id}/remove-feature` — remove the Builder's current XML-removable feature.
-- `POST /api/units/{unit_id}/found-city` — found a city at the Settler's position; body: `{"name":"New City"}`.
-
-Production queue requests with missing costs, unsupported targets, invalid prerequisites or invalid placements return a 4xx response instead of substituting a guessed cost. Unit, city, map and turn changes are written together using staged JSON replacement with rollback on write failure. The browser exposes these APIs in the city production and unit action panels; manual building/wonder editing remains available as a separate editor capability.
-- Original game data belongs to its rights holders. Avoid redistributing proprietary data publicly without checking applicable terms.
+- 첫 실행 화면과 `collect_game_data.bat`. 게임 폴더나 복사한 폴더를 지정하고 추출을 누르면 이전 배포본과 같은 데이터가 만들어집니다(내용이 같은지 표 단위로 대조했습니다).
+- `tools/build_catalog.py` 추가. 예전 배포본의 `catalog.json`을 똑같이 다시 만드는 생성기입니다.
+- `run_windows.bat`이 패키지 설치를 처음 한 번만 하고, 서버가 뜨고 3초 뒤 브라우저를 엽니다.
+- 도시국가 보너스 중 "건물·특수지구를 지을 때 +N" 같은 것을 도시 생산력에 넣어 게임 툴팁과 같은 숫자가 나오게 했습니다.
+- 교역로 기록을 그 기록이 들어 있는 플레이어 기준으로 나눠, 도시국가 상인의 기록이 내 교역로로 들어오던 문제를 고쳤습니다.
+- 인구당 문화를 정확히 0.3으로 계산하고, 화면의 산출은 게임처럼 소수 첫째 자리에서 버립니다.
+- 걸작을 도시에 넣으면 산출에 더합니다.
+- 지도 "타일 상세" 모드, 불러오기 진행 막대, 다른 문명 보기.

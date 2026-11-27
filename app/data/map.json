@@ -30364,10 +30364,10 @@
       "resource": "RESOURCE_NITER",
       "river": true,
       "river_wires": "NW",
-      "improvement": null,
+      "improvement": "IMPROVEMENT_MINE",
       "district": null,
-      "worked": false,
-      "owner_city_id": null,
+      "worked": true,
+      "owner_city_id": "city-7f1b650c",
       "hill_override": null
     },
     {
@@ -31543,7 +31543,7 @@
       "improvement": null,
       "district": null,
       "worked": false,
-      "owner_city_id": null,
+      "owner_city_id": "city-7f1b650c",
       "hill_override": null
     },
     {
@@ -33866,7 +33866,7 @@
       "river_wires": null,
       "improvement": null,
       "district": null,
-      "worked": true,
+      "worked": false,
       "owner_city_id": "city-7f1b650c",
       "hill_override": null
     },
@@ -33880,7 +33880,7 @@
       "river_wires": null,
       "improvement": "IMPROVEMENT_FARM",
       "district": null,
-      "worked": false,
+      "worked": true,
       "owner_city_id": "city-7f1b650c",
       "hill_override": null
     },

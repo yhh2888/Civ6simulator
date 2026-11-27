@@ -1,3 +1,11 @@
 .venv/
 __pycache__/
 *.pyc
+
+# Game rule data is built locally from the user's own Civilization VI install
+# (first-run screen / tools/build_*.py) and must not be committed.
+app/data/catalog.json
+app/data/rules_db.json
+app/data/rules_db_xp2.json
+app/data/data_audit_report.json
+game_data/

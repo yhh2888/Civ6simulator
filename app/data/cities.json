@@ -4,7 +4,7 @@
     "name": "New City",
     "x": 66,
     "y": 27,
-    "population": 4,
+    "population": 6,
     "civilization": null,
     "leader": null,
     "buildings": [
@@ -42,6 +42,11 @@
         "category": "unit",
         "target_id": "UNIT_SETTLER"
       }
-    ]
+    ],
+    "stored_food": 42.80384757729337,
+    "food_yield": 14.0,
+    "food_consumption": 12.0,
+    "food_surplus": 2.0,
+    "food_required": 66.18033988749895
   }
 }

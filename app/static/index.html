@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Civ VI City Studio — MAP EDITOR v0.3.0</title>
+    <title>Civ VI City Studio — CITY SIMULATOR v0.5.1</title>
+    <link rel="stylesheet" href="/static/sim.css" />
     <style>
       :root {
         --bg: #0b1218;
@@ -177,6 +178,16 @@
         font-size: 12px;
         pointer-events: none;
       }
+      .tile-yield-tooltip.pinned {
+        width: min(360px, calc(100% - 16px));
+        max-height: min(65vh, calc(100% - 16px));
+        overflow: auto;
+        pointer-events: auto;
+        background: #21180ff2;
+        border-color: #9c8050;
+        border-radius: 4px;
+        box-shadow: 0 8px 26px #000b;
+      }
       .tile-yield-tooltip[hidden] {
         display: none;
       }
@@ -184,6 +195,47 @@
         display: block;
         margin-bottom: 3px;
         color: #b9e8d3;
+      }
+      .tile-yield-tooltip.pinned strong {
+        color: #f0d48b;
+        font-size: 13px;
+      }
+      .tile-detail-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid #806b48;
+        padding-bottom: 6px;
+      }
+      .tile-detail-header strong {
+        overflow-wrap: anywhere;
+      }
+      .tile-detail-close {
+        flex: 0 0 auto;
+        border-color: #806b48;
+        padding: 1px 7px;
+        line-height: 1.4;
+      }
+      .tile-detail-section {
+        border-bottom: 1px solid #ffffff20;
+        padding: 7px 0;
+      }
+      .tile-detail-section:last-child {
+        border-bottom: 0;
+      }
+      .tile-detail-section h4 {
+        margin: 0 0 4px;
+        color: #e3c77e;
+        font-size: 11px;
+      }
+      .tile-detail-line {
+        overflow-wrap: anywhere;
+      }
+      .tile-detail-yields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 2px 10px;
       }
       .tile-yield-tooltip .muted {
         margin-top: 3px;
@@ -243,6 +295,24 @@
       .metric .value {
         font-size: 20px;
         font-weight: 750;
+      }
+      .food-status {
+        margin-top: 8px;
+        padding: 9px;
+        border: 1px solid #2b414e;
+        border-radius: 8px;
+        background: var(--panel2);
+      }
+      .food-status-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 4px 0;
+      }
+      .food-status-note {
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 11px;
       }
       .status {
         font-size: 11px;
@@ -384,25 +454,69 @@
     </style>
   </head>
   <body>
-    <header>
-      <div>
-        <div
-          style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"
-        >
-          <h1>🏛 Civ VI City Studio</h1>
-          <span class="version-tag"
-            ><span class="version-dot"></span> MAP EDITOR v0.3.0</span
-          >
-        </div>
-        <p>84 × 54 실제 타일 맵 · 캔버스 직접 조작 · 도시/타일 편집</p>
+    <section id="setupScreen" class="setup-screen" hidden>
+      <div class="setup-card">
+        <h1>게임 데이터 준비 / Game data setup</h1>
+        <p>이 시뮬레이터는 문명 6의 규칙 데이터를 함께 배포하지 않습니다. 처음 한 번, 내 PC에 설치된 게임에서 데이터를 읽어 로컬 색인을 만듭니다. 만든 파일은 이 폴더의 <code>app/data</code>에만 저장되고 어디로도 전송되지 않습니다.</p>
+        <p class="en">This simulator does not ship Civilization VI's rule data. On first run it reads the data from the game installed on your PC and builds a local index in <code>app/data</code>. Nothing is uploaded anywhere.</p>
+        <ol>
+          <li><b>방법 1 (권장): 게임 폴더를 바로 지정</b> — 아래 칸에 게임 설치 폴더를 넣고 [추출]을 누릅니다. 예: <code>C:\Program Files (x86)\Steam\steamapps\common\Sid Meier's Civilization VI</code><br>
+            <span class="en"><b>Option 1 (recommended): point at the game folder</b> — enter the install folder below and press Extract.</span></li>
+          <li><b>방법 2: <code>collect_game_data.bat</code> 실행</b> — 프로젝트 폴더의 배치 파일이 게임 폴더에서 <code>Base\Assets\Gameplay\Data</code>와 <code>DLC</code>의 XML·SQL·modinfo만 골라 <code>game_data</code> 폴더로 복사합니다(수십 MB 이하, 아트 파일 제외). 그다음 아래 칸에 <code>game_data</code> 폴더를 넣고 [추출]을 누릅니다.<br>
+            <span class="en"><b>Option 2: run <code>collect_game_data.bat</code></b> — it copies only the XML/SQL/modinfo files of <code>Base\Assets\Gameplay\Data</code> and <code>DLC</code> into <code>game_data</code> (no art). Then enter that folder below and press Extract.</span></li>
+          <li>확장팩(흥망성쇠·몰려드는 폭풍)과 DLC 규칙은 DLC 폴더가 있을 때만 만들어집니다. 기본 게임만 있으면 기본 규칙으로 동작합니다.<br>
+            <span class="en">Expansion and DLC rules are built only when the DLC folder is found; otherwise the base rules are used.</span></li>
+        </ol>
+        <div class="setup-row"><input id="setupPath" placeholder="게임 설치 폴더 또는 game_data 폴더 / Game folder or game_data folder" /><button id="setupStart" type="button" class="primary">추출 / Extract</button></div>
+        <div id="setupFound" class="setup-found"></div>
+        <p id="setupError" class="setup-error"></p>
+        <p class="muted">비공식 팬 도구이며 Firaxis Games·2K와 관계가 없습니다. / Unofficial fan tool, not affiliated with Firaxis Games or 2K.</p>
       </div>
-      <div class="toolbar">
-        <button id="newCityBtn" class="primary">＋ 새 도시 생성</button>
+    </section>
+    <style>
+      .setup-screen { position: fixed; inset: 0; z-index: 9000; background: #0b1419; overflow: auto; display: flex; justify-content: center; padding: 48px 16px; }
+      .setup-screen[hidden] { display: none; }
+      .setup-card { max-width: 860px; color: #e3e9ec; font-size: 15px; line-height: 1.6; }
+      .setup-card h1 { color: #f1d98f; font-size: 24px; margin: 0 0 16px; }
+      .setup-card .en { color: #9fb2bc; }
+      .setup-card code { background: #17252d; padding: 1px 5px; border-radius: 4px; }
+      .setup-card li { margin-bottom: 10px; }
+      .setup-row { display: flex; gap: 8px; margin: 18px 0 8px; }
+      .setup-row input { flex: 1; padding: 10px; font-size: 14px; background: #101d24; color: #e3e9ec; border: 1px solid #355060; border-radius: 6px; }
+      .setup-found { display: flex; flex-wrap: wrap; gap: 6px; }
+      .setup-error { color: #ff9b8a; min-height: 1.4em; }
+      body.setup-mode > :not(#setupScreen):not(#loadBar):not(script):not(style) { display: none !important; }
+    </style>
+
+    <header class="topbar">
+      <div class="brand">
+        <h1>🏛 Civ VI City Studio</h1>
+        <span class="version-tag"><span class="version-dot"></span> CITY SIMULATOR v0.5.1</span>
+      </div>
+      <div class="top-stats" id="topStats">
+        <div class="top-stat"><span class="label">턴</span><strong id="simTurn">-</strong></div>
+        <div class="top-stat"><span class="label">속도</span><strong id="simSpeed">-</strong></div>
+        <div class="top-stat wide"><span class="label">연구</span><strong id="simResearch">-</strong></div>
+        <div class="top-stat"><span class="label">제국 과학</span><strong id="simEmpireScience">-</strong></div>
+        <div class="top-stat"><span class="label">제국 문화</span><strong id="simEmpireCulture">-</strong></div>
+        <div class="top-stat"><span class="label">금 (순)</span><strong id="simEmpireGold">-</strong></div>
+      </div>
+      <div class="toolbar top-actions">
+        <label class="scenario-pick">시나리오
+          <select id="scenarioSelect" title="현재 게임 또는 시나리오 선택"><option value="">현재 게임</option></select>
+        </label>
+        <input id="simTurnsInput" type="number" min="1" max="100" value="1" title="진행할 턴 수" />
+        <button id="simPreviewBtn" type="button" title="저장하지 않고 결과만 계산">미리보기</button>
+        <button id="simRunTurnBtn" class="primary" type="button" title="단축키 T">▶ 턴 실행</button>
+        <button id="newCityBtn">＋ 새 도시</button>
         <button id="saveMapBtn">저장</button>
         <button id="saveMapAsBtn">다른 이름으로 저장</button>
         <button id="loadSavedMapBtn">저장본 불러오기</button>
+        <button id="importSaveBtn" type="button" title="Civilization VI 세이브(.Civ6Save)에서 지도·도시 가져오기">세이브 가져오기</button>
+        <input id="importSaveFile" type="file" accept=".Civ6Save,.civ6save" hidden />
       </div>
     </header>
+    <div id="scenarioBanner" class="scenario-banner hidden"></div>
     <dialog id="createCityDialog" class="city-dialog">
       <form method="dialog">
         <h2>새 도시 생성</h2>
@@ -445,6 +559,28 @@
         </div>
       </form>
     </dialog>
+    <dialog id="importSaveDialog" class="city-dialog import-dialog">
+      <form method="dialog">
+        <h2>Civ VI 세이브 가져오기</h2>
+        <p id="importSaveSummary" class="muted"></p>
+        <div class="field">
+          <label for="importSavePlayer">내 문명으로 가져올 플레이어</label>
+          <select id="importSavePlayer"></select>
+          <p id="importSavePlayerCities" class="muted small"></p>
+        </div>
+        <label class="check-line"><input id="importSaveAutoAssign" type="checkbox" /> 세이브의 시민 배치 대신 균형 전략으로 다시 배치 (시민 정보를 못 읽은 도시는 항상 자동 배치)</label>
+        <div class="import-columns">
+          <div><h3>세이브에서 읽는 것</h3><ul id="importSaveDecoded"></ul></div>
+          <div><h3>읽지 못하거나 추정인 것</h3><ul id="importSaveNotDecoded"></ul></div>
+        </div>
+        <div id="importSaveWarnings" class="import-warnings"></div>
+        <p class="muted small">현재 지도·도시·게임 상태를 교체합니다. [저장]을 누르기 전까지 디스크의 데이터는 바뀌지 않습니다.</p>
+        <div class="city-dialog-actions">
+          <button value="cancel" formnovalidate>취소</button>
+          <button value="import" class="primary">가져오기</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="deleteCityDialog" class="city-dialog">
       <form method="dialog">
         <h2>도시 삭제</h2>
@@ -455,11 +591,21 @@
         </div>
       </form>
     </dialog>
-    <div class="layout">
+    <div class="app-shell">
+      <aside class="left-panel">
+        <div class="panel-title">도시</div>
+        <h2>도시 목록</h2>
+        <div id="cityList" class="city-list"></div>
+        <p id="globalStatus" class="status">데이터를 불러오는 중…</p>
+        <div id="simCityCards" class="city-cards"></div>
+        <div id="simEmpireBox" class="empire-box"></div>
+      </aside>
+      <div class="splitter v" data-split="left" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 도시 패널 너비 조절 · 더블클릭: 기본 크기 · 끝까지 줄이면 숨김"></div>
       <section class="map-panel">
         <div class="map-head">
           <div>
             <strong id="mapTitle">지도 불러오는 중…</strong>
+            <select id="civSwitch" hidden title="같은 세이브의 다른 문명(또는 도시국가)으로 전환"></select>
             <div class="muted">
               도시를 만들려면 먼저 타일을 클릭한 다음 ‘새 도시 생성’을 누르세요.
             </div>
@@ -469,6 +615,20 @@
             ><button id="zoomOut">－ 축소</button
             ><button id="resetView">전체 보기</button
             ><button id="toggleLabels">좌표 표시</button>
+            <select id="overlayMode" title="지도 표시 모드">
+              <option value="details" selected>타일 상세 (지형·산출·시설·특수지구)</option>
+              <option value="normal">일반 지도</option>
+              <option value="Food">식량 산출</option>
+              <option value="Production">생산력 산출</option>
+              <option value="Gold">금 산출</option>
+              <option value="Science">과학 산출</option>
+              <option value="Culture">문화 산출</option>
+              <option value="Faith">신앙 산출</option>
+              <option value="worked">시민 작업 상태</option>
+              <option value="territory">도시 영토</option>
+              <option value="adjacency">특수지구 인접 보너스</option>
+            </select>
+            <button id="citizenEditBtn" type="button" title="켜면 지도 클릭으로 선택 도시의 시민을 배치/해제">👤 시민 배치 모드</button>
           </div>
         </div>
         <div class="canvas-wrap" id="canvasWrap">
@@ -480,80 +640,41 @@
             hidden
           ></div>
           <div class="map-hint">
-            클릭: 타일 선택 · 마우스 오버: 타일 산출량 · C: 시민 작업 토글 · 민트 점: 시민 작업 중 · 능선 선: 언덕 · 드래그: 지도 이동 · 휠: 확대/축소 · 도시 중심은
+            클릭: 타일 선택 및 상세 정보 고정 · 마우스 오버: 타일 정보 · 빈 공간/×: 상세 정보 닫기 · C: 시민 작업 토글 · T: 턴 종료 · 민트 점: 시민 작업 중 · 능선 선: 언덕 · 드래그: 지도 이동 · 휠: 확대/축소 · 도시 중심은
             금색 테두리 · 소유 타일은 초록 테두리
           </div>
         </div>
       </section>
+      <div class="splitter v" data-split="right" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 상세 패널 너비 조절 · 더블클릭: 기본 크기 · 끝까지 줄이면 숨김"></div>
       <aside class="side-panel">
-        <h2>도시 목록</h2>
-        <div id="cityList" class="city-list"></div>
-        <p id="globalStatus" class="status">데이터를 불러오는 중…</p>
+        <div class="tabs" data-tabs="right">
+          <button class="tab" data-tab="overview" type="button">개요</button><button class="tab" data-tab="citizens" type="button">시민</button><button class="tab" data-tab="production" type="button">생산</button><button class="tab" data-tab="empire" type="button">정책·문명</button><button class="tab" data-tab="edit" type="button">편집</button><button class="tab" data-tab="tile" type="button">타일</button><button class="tab" data-tab="research" type="button">연구</button>
+        </div>
+        <div class="pane" data-pane="overview">
+          <div id="simOverview"><p class="muted">도시를 선택하세요.</p></div>
+          <details class="legacy-calc legacy-only">
+            <summary>기존 계산 결과 (/api/calculate, 하위 호환)</summary>
         <div class="section">
-          <h2>문명 연구</h2>
-          <p id="researchSummary" class="muted">연구 정보를 불러오는 중…</p>
-          <div class="field">
-            <label for="technologySelect">기술 연구 · 과학</label>
-            <select id="technologySelect"></select>
-            <button id="technologyResearchBtn" type="button">기술 연구 선택</button>
-          </div>
-          <div class="field">
-            <label for="civicSelect">사회제도 연구 · 문화</label>
-            <select id="civicSelect"></select>
-            <button id="civicResearchBtn" type="button">사회제도 연구 선택</button>
+          <h2>산출량 계산</h2>
+          <div id="metrics" class="metrics"></div>
+          <div id="foodStatus" class="food-status"></div>
+          <div id="yieldBreakdown"></div>
+          <div class="warning">
+            XML에서 확인되는 지형·특성·자원·시설·시민 작업 지구·건물 산출량과
+            일부 지구 인접 보너스를 반영합니다. 인구 초과 작업 타일, 강 인접
+            규칙, 정책·총독·문명 능력, 조건부 수정자, 모든 DLC 규칙은 완전하게
+            시뮬레이션하지 않습니다. 계산 패널의 구현/미구현 규칙과 주의 사항을
+            확인하세요.
           </div>
         </div>
-        <div class="section">
-          <h2>선택한 타일</h2>
-          <p id="tileSummary">지도의 타일을 클릭하세요.</p>
-          <div class="two">
-            <div class="field">
-              <label for="terrain">지형</label
-              ><select id="terrain"></select>
-            </div>
-            <div class="field">
-              <label for="feature">자연 지형</label
-              ><select id="feature"></select>
-            </div>
-            <div class="field">
-              <label for="resource">자원</label
-              ><select id="resource"></select>
-            </div>
-            <div class="field">
-              <label for="improvement">시설</label
-              ><select id="improvement"></select>
-            </div>
-            <div class="field">
-              <label for="district">특수지구</label
-              ><select id="district"></select>
-            </div>
-            <div class="field">
-              <label for="worked">시민 작업 (C)</label
-              ><select id="worked">
-                <option value="false">아니오</option>
-                <option value="true">예</option>
-              </select>
-            </div>
-          </div>
-          <div class="two">
-            <div class="field">
-              <label for="river">강 타일 표시</label
-              ><select id="river">
-                <option value="false">없음</option>
-                <option value="true">강 데이터 있음</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="hillOverride">언덕 설정</label
-              ><select id="hillOverride">
-                <option value="">원본 지형 기준</option>
-                <option value="true">언덕</option>
-                <option value="false">언덕 아님</option>
-              </select>
-            </div>
-          </div>
-          <button id="applyTile" class="primary">선택 타일에 적용</button>
+
+          </details>
         </div>
+        <div class="pane" data-pane="citizens"><div id="simCitizens"><p class="muted">도시를 선택하세요.</p></div></div>
+        <div class="pane" data-pane="production"><div id="simProduction"><p class="muted">도시를 선택하세요.</p></div></div>
+        <div class="pane" data-pane="empire"><div id="simEmpirePanel"><p class="muted">불러오는 중…</p></div></div>
+        <div class="pane legacy-only" data-pane="edit">
+          <p class="legacy-note">기존 편집 도구입니다. 시나리오 모드에서는 현재 게임에만 적용되므로 비활성화됩니다.</p>
         <div class="section">
           <h2>도시 설정</h2>
           <p id="citySummary">
@@ -633,12 +754,32 @@
             </div>
             <button id="productionAddBtn" type="button">대기열에 추가</button>
             <div id="productionQueue"></div>
-            <button id="endTurnBtn" class="primary" type="button">턴 종료 · 생산 적용</button>
-            <p class="muted">예상 완료 턴은 현재 생산력이 유지된다고 가정하며 XML 기본 비용만 사용합니다.</p>
-            <h3>건설자 / 개척자</h3>
+            <button id="endTurnBtn" type="button">레거시 턴 종료 (기존 /api/turn/end)</button>
+            <p class="muted">이 영역은 기존 생산 API(건설자·개척자·지구·건물·불가사의)입니다. 정책 보너스·게임 속도·프로젝트를 반영한 새 생산 대기열은 ‘생산’ 탭을 사용하세요. 상단 ‘턴 실행’은 새 시뮬레이션 엔진을 사용합니다.</p>
+            <h3>유닛 제어 · 강제 관리</h3>
             <div class="field">
               <label for="unitSelect">도시 소유 유닛</label>
               <select id="unitSelect"></select>
+            </div>
+            <div class="field">
+              <label for="forceUnitType">강제 생성 유닛 종류</label>
+              <select id="forceUnitType"></select>
+              <div class="toolbar">
+                <button id="forceCreateUnitBtn" type="button">선택 도시 중심에 유닛 생성</button>
+                <button id="forceDeleteUnitBtn" class="danger" type="button">선택 유닛 강제 삭제</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="forceEntityCategory">강제 배치 개체</label>
+              <select id="forceEntityCategory">
+                <option value="buildings">건물</option>
+                <option value="wonders">불가사의</option>
+                <option value="districts">특수지구</option>
+                <option value="improvements">시설</option>
+              </select>
+              <select id="forceEntityType"></select>
+              <button id="forceAddEntityBtn" type="button">조건 확인 후 추가 / 배치</button>
+              <p class="muted">건물은 도시 조건을, 불가사의·특수지구·시설은 선택 타일과 도시 조건을 충족해야 합니다. 불가한 항목은 사유와 함께 비활성화됩니다.</p>
             </div>
             <div class="two">
               <div class="field">
@@ -654,6 +795,7 @@
             <div class="field">
               <label for="builderImprovement">시설 건설</label>
               <select id="builderImprovement"></select>
+              <p class="muted">건설자는 도심이 아닌 소속 도시의 타일에서 지을 수 있습니다. 타일·기술·행동력 조건을 만족하지 않는 시설은 선택할 수 없습니다.</p>
             </div>
             <div class="toolbar">
               <button id="builderBuildBtn" type="button">시설 건설 (건설자)</button>
@@ -674,28 +816,134 @@
             <h3>총독 승급 (직접 입력 가능)</h3>
             <input id="promotionInput" placeholder="승급 ID를 쉼표로 구분" />
             <div class="toolbar">
-              <button id="saveCityBtn" class="primary">도시 저장</button
+              <button id="saveCityBtn" class="primary">도시 설정 적용</button
               ><button id="deleteCityBtn" class="danger">도시 삭제</button>
             </div>
           </div>
         </div>
+
+        </div>
+        <div class="pane" data-pane="tile">
+          <div id="simTileDetail"><p class="muted">지도에서 타일을 선택하세요.</p></div>
+          <div class="legacy-only">
         <div class="section">
-          <h2>산출량 계산</h2>
-          <div id="metrics" class="metrics"></div>
-          <div id="yieldBreakdown"></div>
-          <div class="warning">
-            XML에서 확인되는 지형·특성·자원·시설·시민 작업 지구·건물 산출량과
-            일부 지구 인접 보너스를 반영합니다. 인구 초과 작업 타일, 강 인접
-            규칙, 정책·총독·문명 능력, 조건부 수정자, 모든 DLC 규칙은 완전하게
-            시뮬레이션하지 않습니다. 계산 패널의 구현/미구현 규칙과 주의 사항을
-            확인하세요.
+          <h2>선택한 타일</h2>
+          <p id="tileSummary">지도의 타일을 클릭하세요.</p>
+          <div class="two">
+            <div class="field">
+              <label for="terrain">지형</label
+              ><select id="terrain"></select>
+            </div>
+            <div class="field">
+              <label for="feature">자연 지형</label
+              ><select id="feature"></select>
+            </div>
+            <div class="field">
+              <label for="resource">자원</label
+              ><select id="resource"></select>
+            </div>
+            <div class="field">
+              <label for="improvement">시설</label
+              ><select id="improvement"></select>
+            </div>
+            <div class="field">
+              <label for="district">특수지구</label
+              ><select id="district"></select>
+            </div>
+            <div class="field">
+              <label for="worked">시민 작업 (C)</label
+              ><select id="worked">
+                <option value="false">아니오</option>
+                <option value="true">예</option>
+              </select>
+            </div>
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="river">강 타일 표시</label
+              ><select id="river">
+                <option value="false">없음</option>
+                <option value="true">강 데이터 있음</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="hillOverride">언덕 설정</label
+              ><select id="hillOverride">
+                <option value="">원본 지형 기준</option>
+                <option value="true">언덕</option>
+                <option value="false">언덕 아님</option>
+              </select>
+            </div>
+          </div>
+          <button id="applyTile" class="primary">선택 타일에 적용</button>
+        </div>
+
           </div>
         </div>
+        <div class="pane legacy-only" data-pane="research">
+        <div class="section">
+          <h2>문명 연구</h2>
+          <p id="researchSummary" class="muted">연구 정보를 불러오는 중…</p>
+          <div class="field">
+            <label for="technologySelect">기술 연구 · 과학</label>
+            <select id="technologySelect"></select>
+            <button id="technologyResearchBtn" type="button">기술 연구 선택</button>
+          </div>
+          <div class="field">
+            <label for="civicSelect">사회제도 연구 · 문화</label>
+            <select id="civicSelect"></select>
+            <button id="civicResearchBtn" type="button">사회제도 연구 선택</button>
+          </div>
+          <h3>강제 해금 / 잠금</h3>
+          <div class="field">
+            <label for="technologyForceSelect">기술</label>
+            <select id="technologyForceSelect"></select>
+            <div class="toolbar">
+              <button id="technologyUnlockBtn" type="button">기술 강제 해금</button>
+              <button id="technologyLockBtn" class="danger" type="button">기술 강제 잠금</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="civicForceSelect">사회제도</label>
+            <select id="civicForceSelect"></select>
+            <div class="toolbar">
+              <button id="civicUnlockBtn" type="button">사회제도 강제 해금</button>
+              <button id="civicLockBtn" class="danger" type="button">사회제도 강제 잠금</button>
+            </div>
+          </div>
+        </div>
+
+        </div>
+      </aside>
+      <div class="splitter h" data-split="dock" role="separator" aria-orientation="horizontal" tabindex="0" title="끌어서 하단 패널 높이 조절 · 더블클릭: 기본 크기 · 끝까지 줄이면 접힘"></div>
+      <section class="bottom-dock">
+        <div class="tabs" data-tabs="bottom">
+          <button class="tab" data-tab="ledger" type="button">도시 장부</button><button class="tab" data-tab="history" type="button">턴별 기록</button><button class="tab" data-tab="scenarios" type="button">시나리오 비교</button><button class="tab" data-tab="chart" type="button">그래프</button><button class="tab" data-tab="log" type="button">이벤트 로그</button><button class="tab" data-tab="basis" type="button">계산 근거·미지원 규칙</button><button class="tab" data-tab="data" type="button">데이터 감사</button>
+          <span class="layout-pick">화면 배치
+            <select id="layoutPreset" title="패널 크기 미리 설정 (경계선을 끌어서 직접 조절할 수도 있습니다)">
+              <option value="">직접 조절</option>
+              <option value="default">기본</option>
+              <option value="map">지도 넓게</option>
+              <option value="analysis">장부·분석 넓게</option>
+              <option value="detail">상세 패널 넓게</option>
+            </select>
+          </span>
+          <button id="dockToggle" class="dock-toggle" type="button" title="하단 패널 접기/펼치기">▾</button>
+        </div>
+        <div class="pane" data-pane="ledger"><div id="simLedger"><p class="muted">도시를 선택하세요.</p></div></div>
+        <div class="pane" data-pane="history"><div id="simHistory"></div></div>
+        <div class="pane" data-pane="scenarios"><div id="simScenarios"></div></div>
+        <div class="pane" data-pane="chart"><div id="simChart"></div></div>
+        <div class="pane" data-pane="log"><div id="simLog"><p class="muted">턴을 실행하면 이벤트가 기록됩니다.</p></div></div>
+        <div class="pane" data-pane="basis"><div id="simBasis"></div></div>
+        <div class="pane" data-pane="data"><div id="simData"></div>
         <div class="section">
           <h2>데이터 감사</h2>
           <div id="audit" class="audit"></div>
         </div>
-      </aside>
+
+        </div>
+      </section>
     </div>
     <script>
       const $ = (id) => document.getElementById(id);
@@ -727,7 +975,9 @@
       let hoverTimer = null;
       let hoverController = null;
       let hoverTileKey = null;
+      let pinnedTileKey = null;
       let hoverPointer = { x: 0, y: 0 };
+      const tileDetailCache = new Map();
       const codeLabel = (s) =>
         (s || "")
           .replace(/^LOC_/, "")
@@ -798,7 +1048,7 @@
             SNOW_HILLS: "#aabbbd",
             MOUNTAIN: "#686b6b",
             LAKE: "#286c8a",
-          }[s] || "#596a65"
+          }[s] || (s.endsWith("_MOUNTAIN") ? "#686b6b" : "#596a65")
         );
       }
       function tileName(t) {
@@ -814,14 +1064,57 @@
         return 10 * state.scale;
       }
 
+      function mapNorthUp() {
+        // Maps imported from a Civ VI save keep game coordinates, where y
+        // grows northwards. Draw them flipped so north is at the top. The
+        // odd-row shift follows the game row parity, so adjacency is kept.
+        return Boolean(state.map && state.map.orientation === "north_up");
+      }
+      function screenRow(y) {
+        return mapNorthUp() ? state.map.height - 1 - y : y;
+      }
       function offsetToPixel(x, y) {
         const r = tileSize();
 
         return {
           x: state.offsetX + r * Math.sqrt(3) * (x + (y % 2) * 0.5),
-          y: state.offsetY + r * 1.5 * y,
+          y: state.offsetY + r * 1.5 * screenRow(y),
         };
       }
+      // Polygon edge i (0 = top→upper-right, clockwise) → game direction.
+      function edgeDirections() {
+        return mapNorthUp()
+          ? ["NE", "E", "SE", "SW", "W", "NW"]
+          : ["SE", "E", "NE", "NW", "W", "SW"];
+      }
+      function gameNeighbor(x, y, dir) {
+        const odd = y & 1;
+        const d = {
+          E: [1, 0], W: [-1, 0],
+          NE: [odd ? 1 : 0, 1], NW: [odd ? 0 : -1, 1],
+          SE: [odd ? 1 : 0, -1], SW: [odd ? 0 : -1, -1],
+        }[dir];
+        return [x + d[0], y + d[1]];
+      }
+      const SAVE_PLAYER_COLORS = [
+        "#e5484d", "#3987e5", "#d95926", "#199e70", "#c98500", "#d55181",
+        "#0ca30c", "#8e6cd8", "#e0e0e0", "#14a8b8", "#b5651d", "#7f8cff",
+        "#ff8fb1", "#a3a33a", "#5fbf9f", "#c06c84",
+      ];
+      function savePlayerColor(player) {
+        if (player === 62) return "#9aa3a8";
+        if (player === 63) return "#6b1d1d";
+        return SAVE_PLAYER_COLORS[Math.abs(Number(player) || 0) % SAVE_PLAYER_COLORS.length];
+      }
+      const DISTRICT_LETTERS = {
+        DISTRICT_CAMPUS: "C", DISTRICT_HOLY_SITE: "H", DISTRICT_COMMERCIAL_HUB: "$",
+        DISTRICT_THEATER: "T", DISTRICT_ENCAMPMENT: "E", DISTRICT_HARBOR: "B",
+        DISTRICT_INDUSTRIAL_ZONE: "I", DISTRICT_WONDER: "W", DISTRICT_AQUEDUCT: "A",
+        DISTRICT_ENTERTAINMENT_COMPLEX: "P", DISTRICT_WATER_ENTERTAINMENT_COMPLEX: "P",
+        DISTRICT_NEIGHBORHOOD: "N", DISTRICT_SPACEPORT: "S", DISTRICT_AERODROME: "R",
+        DISTRICT_GOVERNMENT: "G", DISTRICT_DIPLOMATIC_QUARTER: "D", DISTRICT_PRESERVE: "V",
+        DISTRICT_CANAL: "~", DISTRICT_DAM: "=",
+      };
 
       function tilePolygon(x, y) {
         const p = offsetToPixel(x, y);
@@ -889,6 +1182,9 @@
         );
         const size = 10 * state.scale;
         ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+        const tileAt = mapTileIndex();
+        const edgeDirs = edgeDirections();
+        const foreignCities = (state.map.save_import && state.map.save_import.foreign_cities) || [];
         for (const t of state.map.tiles) {
           const p = offsetToPixel(t.x, t.y);
           if (
@@ -908,7 +1204,9 @@
           ctx.fill();
           ctx.strokeStyle = "#14252d";
           ctx.stroke();
-          if (t.owner_city_id) {
+          const simOverlay = Boolean(window.SimUI && SimUI.overlayActive());
+          if (simOverlay) SimUI.decorateTile(ctx, t, p, size, pts);
+          if (!simOverlay && t.owner_city_id) {
             ctx.beginPath();
             pts.forEach((v, i) =>
               i ? ctx.lineTo(v[0], v[1]) : ctx.moveTo(v[0], v[1]),
@@ -921,7 +1219,7 @@
             ctx.stroke();
             ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
           }
-          if (t.feature) {
+          if (!simOverlay && t.feature) {
             ctx.fillStyle =
               {
                 FEATURE_FOREST: "#174b30",
@@ -935,7 +1233,7 @@
             ctx.arc(p.x, p.y, size * 0.26, 0, Math.PI * 2);
             ctx.fill();
           }
-          if (t.resource) {
+          if (!simOverlay && t.resource) {
             ctx.fillStyle = "#f1d078";
             ctx.beginPath();
             ctx.arc(
@@ -947,7 +1245,7 @@
             );
             ctx.fill();
           }
-          if (t.improvement) {
+          if (!simOverlay && t.improvement) {
             ctx.fillStyle = "#f3e4ba";
             ctx.fillRect(
               p.x - size * 0.15,
@@ -956,7 +1254,35 @@
               size * 0.3,
             );
           }
-          if (t.river) {
+          if (!simOverlay && t.save_owner !== undefined && t.save_owner !== null && !t.owner_city_id) {
+            // Another player's territory from an imported save: border only.
+            ctx.strokeStyle = savePlayerColor(t.save_owner);
+            ctx.lineWidth = Math.max(1, state.scale * 1.6);
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              const [nx, ny] = gameNeighbor(t.x, t.y, edgeDirs[i]);
+              const n = tileAt.get(`${nx},${ny}`);
+              if (n && n.save_owner === t.save_owner) continue;
+              ctx.moveTo(pts[i][0], pts[i][1]);
+              ctx.lineTo(pts[(i + 1) % 6][0], pts[(i + 1) % 6][1]);
+            }
+            ctx.stroke();
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          }
+          if (!simOverlay && Array.isArray(t.river_edges) && t.river_edges.length) {
+            ctx.strokeStyle = "#69c7ef";
+            ctx.lineWidth = Math.max(1.2, state.scale * 1.8);
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              if (!t.river_edges.includes(edgeDirs[i])) continue;
+              ctx.moveTo(pts[i][0], pts[i][1]);
+              ctx.lineTo(pts[(i + 1) % 6][0], pts[(i + 1) % 6][1]);
+            }
+            ctx.stroke();
+            ctx.lineCap = "butt";
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          } else if (!simOverlay && t.river) {
             ctx.strokeStyle = "#69c7ef";
             ctx.lineWidth = Math.max(1, state.scale * 1.4);
             ctx.beginPath();
@@ -993,8 +1319,43 @@
             ctx.stroke();
             ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
           }
+          if (!simOverlay && !t.district && t.district_in_progress && state.scale > 0.35) {
+            // Placed in the save but not finished: dashed outline.
+            ctx.save();
+            ctx.setLineDash([3, 2]);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(18, 28, 34, 0.55)";
+            ctx.fill();
+            ctx.strokeStyle = t.owner_city_id ? "#d6ad59" : "#c9d3d6";
+            ctx.lineWidth = Math.max(1, state.scale * 1.1);
+            ctx.stroke();
+            ctx.restore();
+            ctx.fillStyle = "rgba(255,255,255,0.75)";
+            ctx.font = `bold ${Math.max(7, 8 * state.scale)}px system-ui`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(DISTRICT_LETTERS[t.district_in_progress] || "◇", p.x, p.y + 0.5);
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          }
+          const simDetails = Boolean(window.SimUI && SimUI.detailsAt && SimUI.detailsAt(t, size));
+          if (!simOverlay && !simDetails && t.district && !citiesByPos.has(`${t.x},${t.y}`) && state.scale > 0.35) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(18, 28, 34, 0.85)";
+            ctx.fill();
+            ctx.strokeStyle = t.owner_city_id ? "#d6ad59" : "#c9d3d6";
+            ctx.lineWidth = Math.max(1, state.scale * 1.1);
+            ctx.stroke();
+            ctx.fillStyle = "#ffffff";
+            ctx.font = `bold ${Math.max(7, 8 * state.scale)}px system-ui`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(DISTRICT_LETTERS[t.district] || "◆", p.x, p.y + 0.5);
+            ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+          }
           const city = citiesByPos.get(`${t.x},${t.y}`);
-          if (city) {
+          if (city && !simDetails) {
             ctx.beginPath();
             ctx.arc(p.x, p.y, size * 0.48, 0, Math.PI * 2);
             ctx.fillStyle = "#d6ad59";
@@ -1033,7 +1394,41 @@
             ctx.textAlign = "center";
             ctx.fillText(`${t.x},${t.y}`, p.x, p.y + size * 0.62);
           }
+          if (window.SimUI) SimUI.markTile(ctx, t, p, size, pts);
         }
+        if (foreignCities.length && !(window.SimUI && SimUI.overlayActive())) {
+          for (const fc of foreignCities) {
+            const p = offsetToPixel(fc.x, fc.y);
+            if (p.x < -size * 4 || p.y < -size * 4 || p.x > w + size * 4 || p.y > h + size * 4) continue;
+            ctx.fillStyle = savePlayerColor(fc.player);
+            ctx.strokeStyle = "#0c171d";
+            ctx.lineWidth = 1.2;
+            ctx.fillRect(p.x - size * 0.38, p.y - size * 0.38, size * 0.76, size * 0.76);
+            ctx.strokeRect(p.x - size * 0.38, p.y - size * 0.38, size * 0.76, size * 0.76);
+            if (state.scale > 0.55) {
+              ctx.font = `${Math.max(7, 8 * state.scale)}px system-ui`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.lineWidth = 3;
+              ctx.strokeStyle = "rgba(0,0,0,0.7)";
+              ctx.strokeText(fc.name, p.x, p.y + size * 0.78);
+              ctx.fillStyle = "#e6edf0";
+              ctx.fillText(fc.name, p.x, p.y + size * 0.78);
+            }
+          }
+          ctx.lineWidth = Math.max(0.45, state.scale * 0.75);
+        }
+        if (window.SimUI) SimUI.afterDraw(ctx, size);
+      }
+      let mapTileIndexCache = { map: null, index: new Map() };
+      function mapTileIndex() {
+        if (mapTileIndexCache.map !== state.map) {
+          mapTileIndexCache = {
+            map: state.map,
+            index: new Map(state.map.tiles.map((t) => [`${t.x},${t.y}`, t])),
+          };
+        }
+        return mapTileIndexCache.index;
       }
 
       function screenToTile(px, py) {
@@ -1076,10 +1471,337 @@
         hoverController?.abort();
         hoverController = null;
         hoverTileKey = null;
-        $("tileYieldTooltip").hidden = true;
+        const tooltip = $("tileYieldTooltip");
+        tooltip.hidden = true;
+        tooltip.classList.remove("pinned");
+      }
+
+      function clearTileDetailCache() {
+        tileDetailCache.clear();
+      }
+
+      function tileLabel(group, id) {
+        if (!id) return "";
+        const item = state.catalog?.[group]?.find((entry) => entry.id === id);
+        return item?.label || codeLabel(id);
+      }
+
+      const yieldPresentation = {
+        Food: ["🍎", "식량"],
+        Production: ["⚒", "생산력"],
+        Gold: ["💰", "금"],
+        Science: ["🔬", "과학"],
+        Culture: ["🎭", "문화"],
+        Faith: ["✝", "신앙"],
+      };
+
+      // Loading bar at the top of the window: pct 0..100, or null for "working…".
+      function loadProgress(pct, label) {
+        const bar = $("loadBar");
+        if (!bar) return;
+        bar.hidden = false;
+        if (label) $("loadBarLabel").textContent = label;
+        bar.classList.toggle("indeterminate", pct === null);
+        $("loadBarFill").style.width = pct === null ? "" : `${Math.max(0, Math.min(100, pct))}%`;
+        $("loadBarPct").textContent = pct === null ? "" : `${Math.round(pct)}%`;
+      }
+      function loadDone() {
+        const bar = $("loadBar");
+        if (!bar) return;
+        loadProgress(100, $("loadBarLabel").textContent);
+        setTimeout(() => (bar.hidden = true), 350);
+      }
+      // POST with upload progress (fetch cannot report it).
+      function postWithProgress(url, body, headers, onUpload) {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", url);
+          for (const [k, v] of Object.entries(headers || {})) xhr.setRequestHeader(k, v);
+          xhr.upload.onprogress = (e) => { if (e.lengthComputable) onUpload(e.loaded / e.total); };
+          xhr.upload.onload = () => onUpload(1);
+          xhr.onload = () => {
+            let data = {};
+            try { data = JSON.parse(xhr.responseText); } catch (_) {}
+            resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data });
+          };
+          xhr.onerror = () => reject(new Error("네트워크 오류"));
+          xhr.send(body);
+        });
+      }
+
+      // Civ VI shows yields cut down (not rounded) to one decimal.
+      function fix1(v) {
+        const x = Number(v);
+        return Math.trunc(x * 10 + (x >= 0 ? 1e-9 : -1e-9)) / 10;
+      }
+
+      function yieldText(values, includeZero = false) {
+        return YIELDS.filter(
+          (name) => includeZero || Number(values?.[name]) !== 0,
+        )
+          .map((name) => {
+            const amount = Number(values?.[name] || 0);
+            return `${yieldPresentation[name][0]} ${yieldPresentation[name][1]} ${fix1(amount).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}`;
+          });
+      }
+
+      function appendTileSection(root, title, lines) {
+        if (!lines.length) return;
+        const section = document.createElement("section");
+        section.className = "tile-detail-section";
+        const heading = document.createElement("h4");
+        heading.textContent = title;
+        section.appendChild(heading);
+        for (const text of lines) {
+          const line = document.createElement("div");
+          line.className = "tile-detail-line";
+          line.textContent = text;
+          section.appendChild(line);
+        }
+        root.appendChild(section);
+      }
+
+      function renderTileDetails(details, key, pinned) {
+        const tooltip = $("tileYieldTooltip");
+        const tile = details.tile;
+        const yields = details.yields;
+        const title = `(${tile.x}, ${tile.y}) · ${tileLabel("terrains", tile.terrain)}`;
+        tooltip.replaceChildren();
+        tooltip.classList.toggle("pinned", pinned);
+        const header = document.createElement("div");
+        header.className = "tile-detail-header";
+        const heading = document.createElement("strong");
+        heading.textContent = title;
+        header.appendChild(heading);
+        if (pinned) {
+          const close = document.createElement("button");
+          close.type = "button";
+          close.className = "tile-detail-close";
+          close.setAttribute("aria-label", "타일 상세 정보 닫기");
+          close.textContent = "×";
+          close.onclick = (event) => {
+            event.stopPropagation();
+            pinnedTileKey = null;
+            hideTileYieldTooltip();
+          };
+          header.appendChild(close);
+        }
+        tooltip.appendChild(header);
+
+        if (!pinned) {
+          const yieldRow = document.createElement("div");
+          yieldRow.className = "tile-detail-yields";
+          for (const text of yieldText(yields.yields, true)) {
+            const line = document.createElement("span");
+            line.textContent = text;
+            yieldRow.appendChild(line);
+          }
+          const status = document.createElement("div");
+          status.className = "muted";
+          status.textContent = details.is_city_center
+            ? "도심 타일 · 자동 산출"
+            : details.citizens_working
+              ? `시민 ${details.citizens_working}명 작업 중`
+              : details.owner_city && yields.selected_to_work
+                ? "시민 작업 지정됨 (인구 한도 초과로 비활성)"
+                : yields.preview
+                  ? "시민 작업 시 예상 산출량"
+                  : "미작업 타일";
+          tooltip.append(yieldRow, status);
+          tooltip.hidden = false;
+          positionTileYieldTooltip();
+          return;
+        }
+
+        const tileLines = [
+          `지형: ${tileLabel("terrains", tile.terrain)}`,
+          tile.feature ? `특성: ${tileLabel("features", tile.feature)}` : "",
+          tile.resource ? `자원: ${tileLabel("resources", tile.resource)}` : "",
+          tile.improvement
+            ? `시설: ${tileLabel("improvements", tile.improvement)}`
+            : "",
+          tile.district
+            ? `특수지구: ${tileLabel("districts", tile.district)}`
+            : "",
+          details.wonder_id
+            ? `불가사의: ${codeLabel(details.wonder_id)}`
+            : "",
+          tile.district_in_progress
+            ? `건설 중: ${tileLabel("districts", tile.district_in_progress)}` +
+              (tile.wonder_in_progress ? ` (${codeLabel(tile.wonder_in_progress)})` : "")
+            : "",
+          details.owner_city
+            ? `소유 도시: ${details.owner_city.name}`
+            : "소유 도시: 없음",
+          details.owner_city?.civilization
+            ? `소유 문명: ${codeLabel(details.owner_city.civilization)}`
+            : "",
+        ].filter(Boolean);
+        appendTileSection(tooltip, "타일 정보", tileLines);
+
+        const movementLines = [];
+        if (details.movement_cost !== null && details.movement_cost !== undefined) {
+          movementLines.push(`기본 이동 비용: ${details.movement_cost}`);
+        }
+        for (const modifier of details.defense_modifiers || []) {
+          movementLines.push(
+            `방어 보정 (${tileLabel(modifier.source === "feature" ? "features" : "terrains", modifier.id)}): ${modifier.value > 0 ? "+" : ""}${modifier.value}`,
+          );
+        }
+        appendTileSection(tooltip, "이동 및 환경", movementLines);
+        if (details.appeal !== null || details.continent) {
+          appendTileSection(tooltip, "환경 정보", [
+            details.appeal !== null ? `매력도: ${details.appeal}` : "",
+            details.continent ? `대륙: ${codeLabel(details.continent)}` : "",
+          ].filter(Boolean));
+        }
+
+        const workState = details.is_city_center
+          ? "도심 타일 (시민 지정과 무관하게 산출)"
+          : details.citizens_working
+            ? `시민 ${details.citizens_working}명 작업 중`
+            : details.owner_city && details.yields.selected_to_work
+              ? "시민 작업 지정됨 (인구 한도 초과로 비활성)"
+              : "시민 미작업";
+        const workLines = [
+          `시민 배치: ${workState}`,
+          details.owner_city
+            ? `도시 인구: ${details.owner_city.population ?? "확인 불가"}`
+            : "",
+          `작업 가능: ${details.workable ? "예" : "아니오"}`,
+        ].filter(Boolean);
+        appendTileSection(tooltip, "시민 및 도시", workLines);
+
+        const yieldGrid = document.createElement("div");
+        yieldGrid.className = "tile-detail-yields";
+        for (const text of yieldText(yields.yields, true)) {
+          const line = document.createElement("span");
+          line.textContent = text;
+          yieldGrid.appendChild(line);
+        }
+        const totalSection = document.createElement("section");
+        totalSection.className = "tile-detail-section";
+        const totalHeading = document.createElement("h4");
+        totalHeading.textContent = "타일 총 산출량";
+        totalSection.append(totalHeading, yieldGrid);
+        tooltip.appendChild(totalSection);
+
+        appendTileSection(
+          tooltip,
+          "지형 기본 산출량",
+          yieldText(yields.base_yields),
+        );
+        appendTileSection(
+          tooltip,
+          "계산된 추가 산출량",
+          yieldText(yields.bonus_yields),
+        );
+
+        const componentLines = (yields.components || []).map((component) => {
+          const groups = {
+            feature: "features",
+            resource: "resources",
+            improvement: "improvements",
+            district_citizen: "districts",
+          };
+          const label = groups[component.type]
+            ? tileLabel(groups[component.type], component.id)
+            : component.description || component.id;
+          const values = yieldText(component.changes || component.yields);
+          return values.length ? `${label}: ${values.join(" · ")}` : "";
+        }).filter(Boolean);
+        appendTileSection(tooltip, "산출량 구성 근거", componentLines);
+
+        if (tile.district && details.owner_city?.buildings?.length) {
+          appendTileSection(
+            tooltip,
+            "도시 보유 건물",
+            [
+              ...details.owner_city.buildings.map((id) =>
+                tileLabel("buildings", id),
+              ),
+              "건물은 도시 단위로만 저장되어 이 특수지구와의 소속 관계는 확인할 수 없습니다.",
+            ],
+          );
+        }
+        if (tile.district && !details.district_building_assignment_available) {
+          appendTileSection(tooltip, "건물 배치", [
+            "지구별 건물 배치 정보는 현재 저장되지 않습니다.",
+          ]);
+        }
+        if (
+          details.movement_cost === null ||
+          details.road_movement_cost === null ||
+          details.rail_movement_cost === null
+        ) {
+          appendTileSection(tooltip, "확인할 수 없는 규칙", [
+            "도로·철도 이동 비용, 계산된 매력도와 대륙 정보는 현재 타일 데이터에 없습니다.",
+          ]);
+        }
+        tooltip.hidden = false;
+        positionTileYieldTooltip();
+        if (pinned && pinnedTileKey === key) {
+          tooltip
+            .querySelector(".tile-detail-close")
+            ?.focus({ preventScroll: true });
+        }
+      }
+
+      function showTileDetails(pos, key, pinned) {
+        const cached = tileDetailCache.get(key);
+        if (cached) {
+          renderTileDetails(cached, key, pinned);
+          return;
+        }
+        clearTimeout(hoverTimer);
+        hoverController?.abort();
+        const tooltip = $("tileYieldTooltip");
+        tooltip.replaceChildren();
+        tooltip.hidden = true;
+        hoverTimer = setTimeout(async () => {
+          const controller = new AbortController();
+          hoverController = controller;
+          try {
+            const response = await fetch(
+              `/api/tiles/${pos.x}/${pos.y}/details`,
+              { signal: controller.signal, cache: "no-store" },
+            );
+            if (!response.ok) {
+              throw new Error(`타일 정보 조회 실패 (${response.status})`);
+            }
+            const details = await response.json();
+            tileDetailCache.set(key, details);
+            const stillCurrent =
+              pinnedTileKey === key ||
+              (pinnedTileKey === null && hoverTileKey === key);
+            if (stillCurrent) {
+              renderTileDetails(details, key, pinnedTileKey === key);
+            }
+          } catch (error) {
+            if (error.name === "AbortError") return;
+            if (pinnedTileKey !== key && hoverTileKey !== key) return;
+            tooltip.replaceChildren();
+            const message = document.createElement("div");
+            message.textContent = error.message;
+            tooltip.appendChild(message);
+            tooltip.hidden = false;
+            positionTileYieldTooltip();
+          }
+        }, pinned ? 0 : 70);
+      }
+
+      function pinTileDetails(pos, clientX, clientY) {
+        const wrap = $("canvasWrap");
+        const rect = wrap.getBoundingClientRect();
+        const key = `${pos.x},${pos.y}`;
+        hoverPointer = { x: clientX - rect.left, y: clientY - rect.top };
+        pinnedTileKey = key;
+        hoverTileKey = key;
+        showTileDetails(pos, key, true);
       }
 
       function updateTileYieldHover(pos, clientX, clientY) {
+        if (pinnedTileKey !== null) return;
         const wrap = $("canvasWrap");
         const rect = wrap.getBoundingClientRect();
         hoverPointer = { x: clientX - rect.left, y: clientY - rect.top };
@@ -1093,70 +1815,8 @@
           positionTileYieldTooltip();
           return;
         }
-        clearTimeout(hoverTimer);
-        hoverController?.abort();
         hoverTileKey = key;
-        const tooltip = $("tileYieldTooltip");
-        tooltip.replaceChildren();
-        tooltip.hidden = true;
-        hoverTimer = setTimeout(async () => {
-          const controller = new AbortController();
-          hoverController = controller;
-          try {
-            const response = await fetch(
-              `/api/tiles/${pos.x}/${pos.y}/yields`,
-              { signal: controller.signal, cache: "no-store" },
-            );
-            if (!response.ok) {
-              throw new Error(`산출량 조회 실패 (${response.status})`);
-            }
-            const tile = await response.json();
-            if (hoverTileKey !== key) return;
-
-            const title = document.createElement("strong");
-            title.textContent = `(${tile.x}, ${tile.y}) · ${codeLabel(tile.terrain)}`;
-            const yields = document.createElement("div");
-            yields.textContent =
-              YIELDS.filter((name) => Number(tile.yields?.[name]) > 0)
-                .map((name) => `${name} ${Number(tile.yields[name].toFixed(1))}`)
-                .join(" · ") || "산출량 없음";
-            const stateLine = document.createElement("div");
-            stateLine.className = "muted";
-            stateLine.textContent = tile.city_center
-              ? "도심 타일"
-              : tile.preview
-                ? "시민 작업 시 예상 산출량"
-                : tile.worked
-                  ? "시민 작업 중"
-                  : "미작업 타일";
-            const note = document.createElement("div");
-            note.className = "muted";
-            note.textContent = "타일 자체 산출량 · 도시/인접 보너스 제외";
-            tooltip.append(title, yields, stateLine, note);
-            for (const modifier of tile.applied_modifiers || []) {
-              const detail = document.createElement("div");
-              detail.className = "muted";
-              const changes = YIELDS.filter(
-                (name) => Number(modifier.changes?.[name]) !== 0,
-              )
-                .map((name) => `${name} ${modifier.changes[name] > 0 ? "+" : ""}${modifier.changes[name]}`)
-                .join(" · ");
-              detail.textContent = `${modifier.id}: ${changes} (적용 후 ${YIELDS.filter((name) => Number(modifier.after_yields?.[name]) !== 0).map((name) => `${name} ${modifier.after_yields[name]}`).join(" · ") || "산출량 없음"})`;
-              tooltip.appendChild(detail);
-            }
-            tooltip.hidden = false;
-            positionTileYieldTooltip();
-          } catch (error) {
-            if (error.name === "AbortError" || hoverTileKey !== key) return;
-            const title = document.createElement("strong");
-            title.textContent = `(${pos.x}, ${pos.y}) 산출량`;
-            const message = document.createElement("div");
-            message.textContent = error.message;
-            tooltip.replaceChildren(title, message);
-            tooltip.hidden = false;
-            positionTileYieldTooltip();
-          }
-        }, 100);
+        showTileDetails(pos, key, false);
       }
 
       canvas.addEventListener("pointerdown", (e) => {
@@ -1185,7 +1845,7 @@
         }
       });
       canvas.addEventListener("pointerleave", () => {
-        if (!state.drag) hideTileYieldTooltip();
+        if (!state.drag && pinnedTileKey === null) hideTileYieldTooltip();
       });
       canvas.addEventListener("pointerup", (e) => {
         if (!state.drag) return;
@@ -1197,12 +1857,31 @@
           const pos = screenToTile(e.clientX - r.left, e.clientY - r.top);
           if (pos) {
             state.selectedTile = pos;
+            if (window.SimUI && SimUI.onTileClick(pos, e)) {
+              drawMap();
+              return;
+            }
+            pinTileDetails(pos, e.clientX, e.clientY);
             syncTileEditor();
             drawMap();
+            refreshForcedEntityOptions().catch((error) =>
+              setStatus(`강제 추가 조건 갱신 실패: ${error.message}`),
+            );
             const city = state.cities.find(
               (c) => c.x === pos.x && c.y === pos.y,
             );
             if (city) selectCity(city.id);
+            const unit = selectedUnit();
+            if (
+              unit?.unit_type === "UNIT_BUILDER" &&
+              hexDistance(unit.x, unit.y, pos.x, pos.y) === 1
+            ) {
+              $("unitMoveX").value = pos.x;
+              $("unitMoveY").value = pos.y;
+            }
+          } else {
+            pinnedTileKey = null;
+            hideTileYieldTooltip();
           }
         }
       });
@@ -1256,7 +1935,7 @@
       document.addEventListener("keydown", (event) => {
         const target = event.target;
         if (
-          event.code !== "KeyC" ||
+          !["KeyC", "KeyT"].includes(event.code) ||
           event.ctrlKey ||
           event.altKey ||
           event.metaKey ||
@@ -1269,7 +1948,12 @@
           return;
         }
         event.preventDefault();
-        void toggleSelectedTileWorked();
+        if (event.code === "KeyT") {
+          if (window.SimUI) void SimUI.runTurns(1);
+          else void finishTurn();
+        } else {
+          void toggleSelectedTileWorked();
+        }
       });
       function syncTileEditor() {
         const t = selectedTile();
@@ -1339,14 +2023,18 @@
           return;
         }
         Object.assign(tile, await response.json());
+        clearTileDetailCache();
         syncTileEditor();
         drawMap();
-        updateCitySummary(city);
         setStatus(
           owned
             ? `타일 (${tile.x}, ${tile.y})을(를) ${city.name} 소유로 지정했습니다.`
             : `타일 (${tile.x}, ${tile.y})의 소유를 해제했습니다.`,
         );
+        await refreshForcedEntityOptions().catch((error) =>
+          setStatus(`강제 추가 조건 갱신 실패: ${error.message}`),
+        );
+        updateCitySummary(city);
       }
       async function applyTile() {
         const t = selectedTile();
@@ -1375,15 +2063,19 @@
           return;
         }
         Object.assign(t, await r.json());
+        clearTileDetailCache();
         state.dirty = true;
         syncTileEditor();
         drawMap();
+        setStatus(`타일 (${t.x}, ${t.y}) 수정됨`);
         if (state.selectedCityId) {
           const city = selectedCity();
           if (city) updateCitySummary(city);
           await calculate();
         }
-        setStatus(`타일 (${t.x}, ${t.y}) 수정됨`);
+        await refreshForcedEntityOptions().catch((error) =>
+          setStatus(`강제 추가 조건 갱신 실패: ${error.message}`),
+        );
       }
       function setStatus(msg) {
         $("globalStatus").textContent = msg;
@@ -1456,6 +2148,7 @@
           return;
         }
         const city = await r.json();
+        clearTileDetailCache();
         state.cities.push(city);
         state.selectedCityId = city.id;
         state.map = await (await fetch("/api/map")).json();
@@ -1567,6 +2260,7 @@
           return;
         }
         Object.assign(c, await r.json());
+        clearTileDetailCache();
         state.map = await (await fetch("/api/map", { cache: "no-store" })).json();
         renderCities();
         updateCitySummary(c);
@@ -1574,7 +2268,9 @@
         await calculate();
         await refreshProductionPanel();
         await refreshResearchPanel();
-        setStatus(`도시 "${c.name}" 저장 완료`);
+        setStatus(
+          `도시 "${c.name}" 설정을 적용했습니다 · 파일 저장은 상단 저장 버튼에서 선택하세요.`,
+        );
       }
       async function deleteCity() {
         const city = selectedCity();
@@ -1601,6 +2297,7 @@
           return;
         }
         const previousSelection = state.selectedCityId;
+        clearTileDetailCache();
         state.cities = state.cities.filter((item) => item.id !== cityId);
         state.map.tiles.forEach((tile) => {
           if (tile.owner_city_id === cityId) {
@@ -1628,6 +2325,7 @@
           $("cityEditor").classList.add("hidden");
           $("citySummary").textContent = "도시를 선택하거나 생성하세요.";
           $("metrics").replaceChildren();
+          $("foodStatus").replaceChildren();
           $("yieldBreakdown").replaceChildren();
         }
         setStatus(
@@ -1636,16 +2334,19 @@
             : `도시 "${city.name}" 삭제 완료`,
         );
       }
-      async function calculate() {
+      async function calculate(dataOverride = null, foodOverride = null) {
         const c = selectedCity();
         if (!c) return;
-        const r = await fetch("/api/calculate/" + c.id, { method: "POST" });
-        if (!r.ok) {
-          const error = await r.json().catch(() => ({}));
-          setStatus(error.detail || `산출량 계산 실패 (${r.status})`);
-          return;
+        let data = dataOverride;
+        if (!data) {
+          const r = await fetch("/api/calculate/" + c.id, { method: "POST" });
+          if (!r.ok) {
+            const error = await r.json().catch(() => ({}));
+            setStatus(error.detail || `산출량 계산 실패 (${r.status})`);
+            return;
+          }
+          data = await r.json();
         }
-        const data = await r.json();
         if (selectedCity()?.id !== c.id) return;
         $("metrics").replaceChildren();
         for (const y of YIELDS) {
@@ -1656,9 +2357,31 @@
           label.textContent = y;
           const value = document.createElement("div");
           value.className = "value";
-          value.textContent = Number((data.totals[y] || 0).toFixed(1));
+          value.textContent = Number(fix1(data.totals[y] || 0));
           d.append(label, value);
           $("metrics").appendChild(d);
+        }
+        if (foodOverride) {
+          renderFoodStatus(foodOverride);
+        } else {
+          try {
+            const foodResponse = await fetch(
+              `/api/cities/${encodeURIComponent(c.id)}/food`,
+              { cache: "no-store" },
+            );
+            if (!foodResponse.ok) {
+              const error = await foodResponse.json().catch(() => ({}));
+              throw new Error(
+                error.detail || `식량 상태 조회 실패 (${foodResponse.status})`,
+              );
+            }
+            const food = await foodResponse.json();
+            if (selectedCity()?.id !== c.id) return;
+            renderFoodStatus(food);
+          } catch (error) {
+            $("foodStatus").textContent = "식량 상태를 불러오지 못했습니다.";
+            setStatus(error.message);
+          }
         }
         const breakdown = $("yieldBreakdown");
         breakdown.replaceChildren();
@@ -1711,8 +2434,175 @@
         addDetail("미구현 규칙", data.coverage.not_implemented.join(" · "));
         addDetail("주의 사항", data.caveats.join(" · "));
       }
+      function renderFoodStatus(food) {
+        const root = $("foodStatus");
+        root.replaceChildren();
+        const rows = [
+          ["게임 속도", food.game_speed],
+          ["식량 산출량", `+${fix1(food.food_yield)}`],
+          ["식량 소비량", `-${fix1(food.food_consumption)}`],
+          [
+            "식량 순증감량",
+            `${food.food_surplus >= 0 ? "+" : ""}${fix1(food.food_surplus)}`,
+          ],
+          [
+            "저장 식량",
+            `${fix1(food.stored_food)} / ${
+              food.food_required === null
+                ? "미지원"
+                : Number(food.food_required).toFixed(2)
+            }`,
+          ],
+        ];
+        for (const [labelText, valueText] of rows) {
+          const row = document.createElement("div");
+          row.className = "food-status-row";
+          const label = document.createElement("span");
+          label.textContent = labelText;
+          const value = document.createElement("strong");
+          value.textContent = valueText;
+          row.append(label, value);
+          root.appendChild(row);
+        }
+        const progressRow = document.createElement("div");
+        progressRow.className = "food-status-row";
+        const progressLabel = document.createElement("span");
+        progressLabel.textContent = "다음 인구 성장 진행률";
+        const progressValue = document.createElement("strong");
+        progressValue.textContent =
+          food.growth_progress === null
+            ? "미지원"
+            : `${fix1(food.growth_progress)}%`;
+        progressRow.append(progressLabel, progressValue);
+        root.appendChild(progressRow);
+        const note = document.createElement("div");
+        note.className = "food-status-note";
+        note.textContent = !food.growth_supported
+          ? "이 게임 속도의 성장 요구량은 확인되지 않아 성장 계산을 적용하지 않습니다."
+          : !food.growth_enabled
+            ? "턴당 인구 성장 상한에 도달했습니다."
+            : "성장 진행률은 0~100%로 표시하며, 초과 저장 식량은 보존됩니다.";
+        root.appendChild(note);
+      }
+      function renderProductionStatus(production) {
+        $("productionSummary").textContent =
+          `현재 턴 ${production.turn} · 도시 생산력 ${fix1(production.production_per_turn)}/턴`;
+        const queueRoot = $("productionQueue");
+        queueRoot.replaceChildren();
+        if (!production.queue.length) {
+          queueRoot.textContent = "생산 대기열이 비어 있습니다.";
+        }
+        production.queue.forEach((entry, index) => {
+          const row = document.createElement("div");
+          row.className = "city-entry";
+          const detail = document.createElement("span");
+          const eta =
+            entry.estimated_turns === null
+              ? "완료 예상 미정"
+              : `약 ${entry.estimated_turns}턴`;
+          detail.textContent =
+            `${index === 0 ? "▶ " : ""}${codeLabel(entry.target_id)} · ${entry.progress}/${entry.cost ?? "?"} · 남음 ${entry.remaining ?? "?"} · ${eta}`;
+          row.appendChild(detail);
+          for (const [label, position] of [
+            ["↑", Math.max(0, index - 1)],
+            ["↓", Math.min(production.queue.length - 1, index + 1)],
+          ]) {
+            const move = document.createElement("button");
+            move.type = "button";
+            move.textContent = label;
+            move.disabled = position === index;
+            move.onclick = () =>
+              changeProductionOrder(entry.queue_id, position);
+            row.appendChild(move);
+          }
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.textContent = "취소";
+          remove.onclick = () => removeProduction(entry.queue_id);
+          row.appendChild(remove);
+          queueRoot.appendChild(row);
+        });
+      }
       function selectedUnit() {
         return state.game.units.find((unit) => unit.id === $("unitSelect").value);
+      }
+      async function fetchEntityOptions(category, city, tile) {
+        const params = new URLSearchParams({ category });
+        if (city) params.set("city_id", city.id);
+        if (tile) {
+          params.set("x", tile.x);
+          params.set("y", tile.y);
+        }
+        const response = await fetch(
+          `/api/entities/catalog?${params.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || "개체 조건을 불러오지 못했습니다.");
+        }
+        const data = await response.json();
+        return data.categories[category]?.items || [];
+      }
+      async function refreshForcedEntityOptions() {
+        const city = selectedCity();
+        if (!city) {
+          $("forceCreateUnitBtn").disabled = true;
+          $("forceAddEntityBtn").disabled = true;
+          $("forceUnitType").replaceChildren();
+          $("forceEntityType").replaceChildren();
+          return;
+        }
+        const tile = selectedTile();
+        const category = $("forceEntityCategory").value;
+        const usesTile = ["wonders", "districts", "improvements"].includes(
+          category,
+        );
+        const forceUnitType = $("forceUnitType");
+        const previousUnit = forceUnitType.value;
+        const unitOptions = await fetchEntityOptions("units", city);
+        forceUnitType.replaceChildren();
+        for (const item of unitOptions) {
+          const option = document.createElement("option");
+          option.value = item.id;
+          option.disabled = !item.available;
+          option.textContent =
+            `${codeLabel(item.id)}${item.available ? "" : ` · 불가: ${item.unavailable_reasons.join(" ")}`}`;
+          forceUnitType.appendChild(option);
+        }
+        if ([...forceUnitType.options].some((item) => item.value === previousUnit)) {
+          forceUnitType.value = previousUnit;
+        }
+        const selectedUnitOption = forceUnitType.selectedOptions[0];
+        $("forceCreateUnitBtn").disabled =
+          !selectedUnitOption || selectedUnitOption.disabled;
+
+        const entitySelect = $("forceEntityType");
+        const previousEntity = entitySelect.value;
+        const options = await fetchEntityOptions(
+          category,
+          city,
+          usesTile ? tile : null,
+        );
+        entitySelect.replaceChildren();
+        for (const item of options) {
+          const option = document.createElement("option");
+          option.value = item.id;
+          const missingTile = usesTile && !tile;
+          option.disabled = !item.available || missingTile;
+          const reasons = [...item.unavailable_reasons];
+          if (missingTile) reasons.push("배치할 타일을 먼저 선택하세요.");
+          option.textContent =
+            `${codeLabel(item.id)}${option.disabled ? ` · 불가: ${reasons.join(" ")}` : ""}`;
+          entitySelect.appendChild(option);
+        }
+        if ([...entitySelect.options].some((item) => item.value === previousEntity)) {
+          entitySelect.value = previousEntity;
+        }
+        $("forceAddEntityBtn").disabled =
+          !city ||
+          !entitySelect.selectedOptions[0] ||
+          entitySelect.selectedOptions[0].disabled;
       }
       async function refreshProductionPanel() {
         const city = selectedCity();
@@ -1735,8 +2625,7 @@
           const production = await productionResponse.json();
           const catalog = await catalogResponse.json();
           state.game = await gameResponse.json();
-          $("productionSummary").textContent =
-            `현재 턴 ${production.turn} · 도시 생산력 ${production.production_per_turn.toFixed(1)}/턴`;
+          renderProductionStatus(production);
           const target = $("productionTarget");
           target.replaceChildren();
           for (const item of catalog.items) {
@@ -1746,41 +2635,6 @@
             option.disabled = !item.available;
             target.appendChild(option);
           }
-          const queueRoot = $("productionQueue");
-          queueRoot.replaceChildren();
-          if (!production.queue.length) {
-            queueRoot.textContent = "생산 대기열이 비어 있습니다.";
-          }
-          production.queue.forEach((entry, index) => {
-            const row = document.createElement("div");
-            row.className = "city-entry";
-            const detail = document.createElement("span");
-            const eta =
-              entry.estimated_turns === null
-                ? "완료 예상 미정"
-                : `약 ${entry.estimated_turns}턴`;
-            detail.textContent =
-              `${index === 0 ? "▶ " : ""}${codeLabel(entry.target_id)} · ${entry.progress}/${entry.cost ?? "?"} · 남음 ${entry.remaining ?? "?"} · ${eta}`;
-            row.appendChild(detail);
-            for (const [label, position] of [
-              ["↑", Math.max(0, index - 1)],
-              ["↓", Math.min(production.queue.length - 1, index + 1)],
-            ]) {
-              const move = document.createElement("button");
-              move.type = "button";
-              move.textContent = label;
-              move.disabled = position === index;
-              move.onclick = () =>
-                changeProductionOrder(entry.queue_id, position);
-              row.appendChild(move);
-            }
-            const remove = document.createElement("button");
-            remove.type = "button";
-            remove.textContent = "취소";
-            remove.onclick = () => removeProduction(entry.queue_id);
-            row.appendChild(remove);
-            queueRoot.appendChild(row);
-          });
           const units = state.game.units.filter(
             (unit) => unit.owner_city_id === city.id,
           );
@@ -1797,15 +2651,8 @@
           if (units.some((unit) => unit.id === selectedUnitId)) {
             unitSelect.value = selectedUnitId;
           }
-          const improvementSelect = $("builderImprovement");
-          improvementSelect.replaceChildren();
-          for (const item of state.catalog.improvements) {
-            if (item.raw?.Buildable !== "true") continue;
-            const option = document.createElement("option");
-            option.value = item.id;
-            option.textContent = codeLabel(item.id);
-            improvementSelect.appendChild(option);
-          }
+          await refreshBuilderImprovementOptions();
+          await refreshForcedEntityOptions();
           syncUnitControls();
         } catch (error) {
           $("productionSummary").textContent = error.message;
@@ -1853,6 +2700,33 @@
             );
             if (firstAvailable) select.value = firstAvailable.id;
           }
+          const forceSelect = $(
+            category === "technology"
+              ? "technologyForceSelect"
+              : "civicForceSelect",
+          );
+          const previousForceId = forceSelect.value;
+          forceSelect.replaceChildren();
+          for (const item of data.options[category]) {
+            const option = document.createElement("option");
+            option.value = item.id;
+            option.textContent =
+              `${codeLabel(item.id)}${item.completed ? " · 완료" : ""}`;
+            forceSelect.appendChild(option);
+          }
+          if (
+            [...forceSelect.options].some(
+              (option) => option.value === previousForceId,
+            )
+          ) {
+            forceSelect.value = previousForceId;
+          }
+          const alreadyUnlocked = data[category === "technology" ? "technologies" : "civics"]
+            .includes(forceSelect.value);
+          $(`${category}UnlockBtn`).disabled =
+            !forceSelect.value || alreadyUnlocked;
+          $(`${category}LockBtn`).disabled =
+            !forceSelect.value || !alreadyUnlocked;
           const button = $(
             category === "technology"
               ? "technologyResearchBtn"
@@ -1865,10 +2739,10 @@
         const civic = data.tracks.civic;
         const progressText = (track) =>
           track.current_id
-            ? `${codeLabel(track.current_id)} ${Number(track.progress).toFixed(1)}/${track.cost} · 남음 ${Number(track.remaining).toFixed(1)}`
+            ? `${codeLabel(track.current_id)} ${fix1(track.progress)}/${track.cost} · 남음 ${fix1(track.remaining)}`
             : "선택 안 됨";
         $("researchSummary").textContent =
-          `문명 전체 합계 · 과학 ${data.science_per_turn.toFixed(1)}/턴 · 문화 ${data.culture_per_turn.toFixed(1)}/턴 · ` +
+          `문명 전체 합계 · 과학 ${fix1(data.science_per_turn)}/턴 · 문화 ${fix1(data.culture_per_turn)}/턴 · ` +
           `기술: ${progressText(tech)} · 사회제도: ${progressText(civic)} · 완료 ${data.technologies.length}개 기술 / ${data.civics.length}개 사회제도`;
       }
       async function selectResearch(category) {
@@ -1886,11 +2760,34 @@
           setStatus(`연구 선택 실패: ${error.message}`);
         }
       }
+      async function forceResearchAvailability(category, unlocked) {
+        const select = $(
+          category === "technology"
+            ? "technologyForceSelect"
+            : "civicForceSelect",
+        );
+        if (!select.value) return;
+        try {
+          await productionRequest(
+            `/api/research/${category}/${encodeURIComponent(select.value)}/availability`,
+            "PUT",
+            { unlocked },
+          );
+          await refreshResearchPanel();
+          setStatus(
+            `${codeLabel(select.value)} 연구를 강제 ${unlocked ? "해금" : "잠금"}했습니다.`,
+          );
+        } catch (error) {
+          setStatus(`연구 강제 변경 실패: ${error.message}`);
+        }
+      }
       function syncUnitControls() {
         const unit = selectedUnit();
+        const buildButton = $("builderBuildBtn");
+        const improvementSelect = $("builderImprovement");
+        buildButton.disabled = true;
+        $("forceDeleteUnitBtn").disabled = !unit;
         $("unitMoveBtn").disabled = !unit || unit.moves_remaining < 1;
-        $("builderBuildBtn").disabled =
-          !unit || unit.unit_type !== "UNIT_BUILDER";
         $("builderRemoveBtn").disabled =
           !unit || unit.unit_type !== "UNIT_BUILDER";
         $("settlerFoundBtn").disabled =
@@ -1899,10 +2796,116 @@
           $("unitStatus").textContent = "이 도시가 보유한 건설자·개척자가 없습니다.";
           return;
         }
+        const selectedOption = $("unitSelect").selectedOptions[0];
+        if (selectedOption) {
+          selectedOption.textContent =
+            `${codeLabel(unit.unit_type)} · (${unit.x}, ${unit.y}) · 이동 ${unit.moves_remaining} · 행동 ${unit.charges_remaining}`;
+        }
         $("unitMoveX").value = unit.x;
         $("unitMoveY").value = unit.y;
-        $("unitStatus").textContent =
-          `${codeLabel(unit.unit_type)} 위치 (${unit.x}, ${unit.y}) · 남은 이동 ${unit.moves_remaining} · 남은 행동 ${unit.charges_remaining}`;
+        const city = state.cities.find(
+          (item) => item.id === unit.owner_city_id,
+        );
+        const tile = state.map?.tiles.find(
+          (item) => item.x === unit.x && item.y === unit.y,
+        );
+        const isBuilder = unit.unit_type === "UNIT_BUILDER";
+        const onCityCenter =
+          city && city.x === unit.x && city.y === unit.y;
+        const ownedByCity = tile?.owner_city_id === city?.id;
+        const selectedImprovement = improvementSelect.selectedOptions[0];
+        const improvementChargeCost =
+          state.rules?.improvements?.overrides?.[
+            improvementSelect.value
+          ]?.build_charges ??
+          state.rules?.improvements?.default_build_charges ??
+          1;
+        const buildDisabled =
+          !isBuilder ||
+          !tile ||
+          !ownedByCity ||
+          onCityCenter ||
+          Boolean(tile?.district) ||
+          unit.charges_remaining < improvementChargeCost ||
+          !selectedImprovement ||
+          selectedImprovement.disabled;
+        buildButton.disabled = buildDisabled;
+        let unitStatus =
+          `${codeLabel(unit.unit_type)} 위치 (${unit.x}, ${unit.y}) · 남은 이동 ${unit.moves_remaining} · 행동 ${unit.charges_remaining}`;
+        if (isBuilder && onCityCenter) {
+          unitStatus += " · 도심에서는 시설을 지을 수 없습니다. 소유 타일로 이동하세요.";
+        } else if (isBuilder && !ownedByCity) {
+          unitStatus += " · 소유 도시의 타일에서만 시설을 지을 수 있습니다.";
+        } else if (isBuilder && tile?.district) {
+          unitStatus += " · 특수지구 타일에는 시설을 지을 수 없습니다.";
+        } else if (
+          isBuilder &&
+          unit.charges_remaining < improvementChargeCost
+        ) {
+          unitStatus += " · 건설자 행동력이 부족합니다.";
+        } else if (
+          isBuilder &&
+          selectedImprovement &&
+          selectedImprovement.disabled
+        ) {
+          unitStatus += " · 선택한 시설을 이 타일에 지을 수 없습니다.";
+        }
+        $("unitStatus").textContent = unitStatus;
+      }
+      async function refreshBuilderImprovementOptions() {
+        const select = $("builderImprovement");
+        const unit = selectedUnit();
+        select.replaceChildren();
+        select.disabled = true;
+        if (!unit || unit.unit_type !== "UNIT_BUILDER") {
+          return;
+        }
+        const city = state.cities.find(
+          (item) => item.id === unit.owner_city_id,
+        );
+        if (!city) {
+          return;
+        }
+        const params = new URLSearchParams({
+          category: "improvements",
+          city_id: city.id,
+          x: String(unit.x),
+          y: String(unit.y),
+        });
+        const response = await fetch(
+          `/api/entities/catalog?${params.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(
+            error.detail || `시설 조건을 불러오지 못했습니다 (${response.status})`,
+          );
+        }
+        const data = await response.json();
+        const buildable = new Set(
+          state.catalog.improvements
+            .filter((item) => item.raw?.Buildable === "true")
+            .map((item) => item.id),
+        );
+        for (const item of data.categories.improvements.items) {
+          if (!buildable.has(item.id)) continue;
+          const option = document.createElement("option");
+          option.value = item.id;
+          const reasons = item.unavailable_reasons || [];
+          option.textContent = item.available
+            ? codeLabel(item.id)
+            : `${codeLabel(item.id)} · 불가: ${reasons.join(" ")}`;
+          option.disabled = !item.available;
+          select.appendChild(option);
+        }
+        select.disabled = false;
+        const firstAvailable = [...select.options].find(
+          (option) => !option.disabled,
+        );
+        if (firstAvailable) select.value = firstAvailable.value;
+        else if (select.options.length) select.selectedIndex = 0;
+        syncUnitControls();
       }
       async function productionRequest(url, method, body) {
         const response = await fetch(url, {
@@ -1914,6 +2917,7 @@
           const error = await response.json().catch(() => ({}));
           throw new Error(error.detail || `요청 실패 (${response.status})`);
         }
+        clearTileDetailCache();
         return response.json();
       }
       async function addProduction() {
@@ -1966,30 +2970,72 @@
           setStatus(`생산 취소 실패: ${error.message}`);
         }
       }
+      function renderTurnResearchSummary(result) {
+        const progressText = (track) =>
+          track.current_id
+            ? `${codeLabel(track.current_id)} ${fix1(track.progress)}/${track.cost ?? "?"} · 남음 ${Math.max(0, (track.cost ?? 0) - track.progress).toFixed(1)}`
+            : "선택 안 됨";
+        const tech = result.research_summary.technology;
+        const civic = result.research_summary.civic;
+        $("researchSummary").textContent =
+          `문명 전체 합계 · 과학 ${fix1(tech.yield_per_turn)}/턴 · 문화 ${fix1(civic.yield_per_turn)}/턴 · ` +
+          `기술: ${progressText(tech)} · 사회제도: ${progressText(civic)} · 완료 ${result.game_state.technologies.length}개 기술 / ${result.game_state.civics.length}개 사회제도`;
+      }
       async function finishTurn() {
         const button = $("endTurnBtn");
         if (button.disabled) return;
         button.disabled = true;
         try {
-          const result = await productionRequest("/api/turn/end", "POST");
+          const cityId = state.selectedCityId;
+          const turnUrl = cityId
+            ? `/api/turn/end?city_id=${encodeURIComponent(cityId)}`
+            : "/api/turn/end";
+          const result = await productionRequest(turnUrl, "POST");
           state.game = result.game_state;
-          state.map = await (
-            await fetch("/api/map", { cache: "no-store" })
-          ).json();
-          state.cities = await (
-            await fetch("/api/cities", { cache: "no-store" })
-          ).json();
-          renderCities();
-          if (state.cities.some((city) => city.id === state.selectedCityId)) {
-            selectCity(state.selectedCityId);
+          state.cities = result.cities;
+          clearTileDetailCache();
+          for (const change of result.map_changes) {
+            const tile = state.map.tiles.find(
+              (item) => item.x === change.x && item.y === change.y,
+            );
+            if (tile) Object.assign(tile, change);
           }
+          renderCities();
+          const city = selectedCity();
+          if (city && result.selected_city_yields) {
+            $("population").value = city.population;
+            updateCitySummary(city);
+            await calculate(
+              result.selected_city_yields,
+              result.selected_city_food,
+            );
+            renderProductionStatus(result.selected_city_production);
+            const units = state.game.units.filter(
+              (unit) => unit.owner_city_id === city.id,
+            );
+            const unitSelect = $("unitSelect");
+            const selectedUnitId = unitSelect.value;
+            unitSelect.replaceChildren();
+            for (const unit of units) {
+              const option = document.createElement("option");
+              option.value = unit.id;
+              option.textContent =
+                `${codeLabel(unit.unit_type)} · (${unit.x}, ${unit.y}) · 이동 ${unit.moves_remaining} · 행동 ${unit.charges_remaining}`;
+              unitSelect.appendChild(option);
+            }
+            if (units.some((unit) => unit.id === selectedUnitId)) {
+              unitSelect.value = selectedUnitId;
+            }
+            syncUnitControls();
+          }
+          if (result.map_changes.length) drawMap();
+          renderTurnResearchSummary(result);
           const completed = result.completed
             .map((item) => codeLabel(item.id))
             .join(", ");
           const completedResearch = (result.completed_research || [])
             .map((item) => codeLabel(item.id))
             .join(", ");
-          await refreshResearchPanel();
           setStatus(
             [
               `턴 ${result.turn} 시작`,
@@ -2009,19 +3055,143 @@
         const unit = selectedUnit();
         if (!unit) return;
         try {
-          await productionRequest(
+          const result = await productionRequest(
             `/api/units/${encodeURIComponent(unit.id)}/${path}`,
             "POST",
             body,
           );
-          state.map = await (
-            await fetch("/api/map", { cache: "no-store" })
-          ).json();
+          if (result.unit) {
+            Object.assign(unit, result.unit);
+          } else if (path === "move") {
+            Object.assign(unit, result);
+          }
+          if (path === "move") {
+            syncUnitControls();
+            if (unit.unit_type === "UNIT_BUILDER") {
+              try {
+                await refreshBuilderImprovementOptions();
+              } catch (error) {
+                setStatus(
+                  `유닛은 이동했지만 시설 조건 갱신에 실패했습니다: ${error.message}`,
+                );
+                return;
+              }
+            }
+            setStatus("유닛을 인접 타일로 이동했습니다.");
+            return;
+          }
+          if (result.tile) {
+            const tile = state.map.tiles.find(
+              (item) =>
+                item.x === result.tile.x && item.y === result.tile.y,
+            );
+            if (tile) Object.assign(tile, result.tile);
+          }
           await refreshProductionPanel();
+          syncTileEditor();
           drawMap();
-          setStatus("유닛 행동을 적용했습니다.");
+          if (selectedCity()) await calculate();
+          setStatus(
+            path === "build"
+              ? `${codeLabel(body.improvement_id)} 시설을 건설했습니다. 건설자 행동 ${result.unit.charges_remaining}회 남음.`
+              : path === "remove-feature"
+                ? `자연 지형을 제거했습니다. 건설자 행동 ${result.unit.charges_remaining}회 남음.`
+                : "유닛 행동을 적용했습니다.",
+          );
         } catch (error) {
           setStatus(`유닛 행동 실패: ${error.message}`);
+        }
+      }
+      async function forceCreateUnit() {
+        const city = selectedCity();
+        const unitType = $("forceUnitType").value;
+        const unitOption = $("forceUnitType").selectedOptions[0];
+        if (!city || !unitType || !unitOption || unitOption.disabled) return;
+        try {
+          const unit = await productionRequest("/api/units/force", "POST", {
+            unit_type: unitType,
+            owner_city_id: city.id,
+          });
+          await refreshProductionPanel();
+          $("unitSelect").value = unit.id;
+          syncUnitControls();
+          setStatus(
+            `${codeLabel(unit.unit_type)} 유닛을 (${unit.x}, ${unit.y})에 강제 생성했습니다.`,
+          );
+        } catch (error) {
+          setStatus(`유닛 강제 생성 실패: ${error.message}`);
+        }
+      }
+      async function forceAddEntity() {
+        const city = selectedCity();
+        const category = $("forceEntityCategory").value;
+        const entityId = $("forceEntityType").value;
+        const option = $("forceEntityType").selectedOptions[0];
+        if (!city || !entityId || !option || option.disabled) return;
+        const placement = ["wonders", "districts", "improvements"].includes(
+          category,
+        )
+          ? selectedTile()
+          : null;
+        if (
+          ["wonders", "districts", "improvements"].includes(category) &&
+          !placement
+        ) {
+          setStatus("배치할 지도 타일을 먼저 선택하세요.");
+          return;
+        }
+        try {
+          const result = await productionRequest("/api/entities/force", "POST", {
+            category,
+            entity_id: entityId,
+            city_id: city.id,
+            ...(placement ? { x: placement.x, y: placement.y } : {}),
+          });
+          const [mapResponse, citiesResponse] = await Promise.all([
+            fetch("/api/map", { cache: "no-store" }),
+            fetch("/api/cities", { cache: "no-store" }),
+          ]);
+          if (!mapResponse.ok || !citiesResponse.ok) {
+            throw new Error("변경된 지도 또는 도시 정보를 불러오지 못했습니다.");
+          }
+          state.map = await mapResponse.json();
+          state.cities = await citiesResponse.json();
+          renderCities();
+          syncTileEditor();
+          const updatedCity = selectedCity();
+          if (!updatedCity) throw new Error("선택한 도시가 더 이상 존재하지 않습니다.");
+          const ownedEntities = new Set([
+            ...(updatedCity.buildings || []),
+            ...(updatedCity.wonders || []),
+          ]);
+          document
+            .querySelectorAll("[data-building]")
+            .forEach((input) => {
+              input.checked = ownedEntities.has(input.dataset.building);
+            });
+          updateCitySummary(updatedCity);
+          await refreshProductionPanel();
+          calculate();
+          drawMap();
+          setStatus(
+            `${codeLabel(result.id)}을(를) 조건에 따라 ${category === "buildings" ? "도시에 추가" : `(${result.x}, ${result.y})에 배치`}했습니다.`,
+          );
+        } catch (error) {
+          setStatus(`개체 강제 추가 실패: ${error.message}`);
+        }
+      }
+      async function forceDeleteUnit() {
+        const unit = selectedUnit();
+        if (!unit) return;
+        try {
+          await productionRequest(
+            `/api/units/${encodeURIComponent(unit.id)}`,
+            "DELETE",
+          );
+          await refreshProductionPanel();
+          setStatus(`${codeLabel(unit.unit_type)} 유닛을 강제 삭제했습니다.`);
+        } catch (error) {
+          setStatus(`유닛 강제 삭제 실패: ${error.message}`);
         }
       }
       async function foundCityWithSettler() {
@@ -2088,6 +3258,176 @@
           setStatus(`다른 이름으로 저장 요청 실패: ${error.message}`);
         }
       }
+      async function applyLoadedDocuments(result, auditLabel) {
+        state.map = result.map;
+        state.cities = result.cities;
+        state.game = result.game_state || { turn: 1, units: [] };
+        clearTileDetailCache();
+        pinnedTileKey = null;
+        hideTileYieldTooltip();
+        state.selectedCityId = null;
+        state.selectedTile = {
+          x: Math.floor(state.map.width / 2),
+          y: Math.floor(state.map.height / 2),
+        };
+        setOptions(
+          "terrain",
+          [...new Set(state.map.tiles.map((tile) => tile.terrain))].map(
+            (id) => ({ id, label: codeLabel(id) }),
+          ),
+          "지형 선택",
+        );
+        $("mapTitle").textContent =
+          `지도 ${state.map.width} × ${state.map.height} · 타일 ${state.map.count.toLocaleString()}개`;
+        $("mapTitle").title = "";
+        $("audit").textContent =
+          `${auditLabel} · ${state.map.width} × ${state.map.height} · ${state.map.count} tiles`;
+        $("metrics").replaceChildren();
+        $("yieldBreakdown").replaceChildren();
+        renderCities();
+        syncTileEditor();
+        drawMap();
+        fitMap();
+        await refreshResearchPanel();
+        if (state.cities.length) selectCity(state.cities[0].id);
+        else {
+          $("cityEditor").classList.add("hidden");
+          $("citySummary").textContent = "도시를 선택하거나 생성하세요.";
+        }
+      }
+      function escapeText(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      }
+      async function importCiv6Save(file) {
+        if (!file) return;
+        setStatus(`세이브 해독 중… (${file.name}, ${fix1(file.size / 1048576)}MB)`);
+        let preview;
+        loadProgress(0, `세이브 올리는 중… ${file.name}`);
+        let decodeTimer = null;
+        try {
+          const response = await postWithProgress(
+            "/api/import/civ6save/preview",
+            file,
+            { "Content-Type": "application/octet-stream", "X-Filename": encodeURIComponent(file.name) },
+            (f) => {
+              loadProgress(f * 40, f < 1 ? `세이브 올리는 중… ${file.name}` : "세이브 해독 중… (지형·도시·기술·사절·교역로)");
+              if (f >= 1 && !decodeTimer) {
+                // Server-side decoding has no progress events: creep towards 95%.
+                let pct = 40;
+                decodeTimer = setInterval(() => { pct += (95 - pct) * 0.08; loadProgress(pct); }, 200);
+              }
+            },
+          );
+          preview = response.data;
+          if (!response.ok) {
+            setStatus(preview.detail || `세이브 해독 실패 (${response.status})`);
+            return;
+          }
+        } catch (error) {
+          setStatus(`세이브 업로드 실패: ${error.message}`);
+          return;
+        } finally {
+          clearInterval(decodeTimer);
+          loadDone();
+        }
+        const speedName = { QUICK: "빠름", ONLINE: "온라인", STANDARD: "표준", EPIC: "에픽", MARATHON: "마라톤" };
+        const header = preview.header || {};
+        const plain = (v, prefix) => (v ? String(v).replace(prefix, "").replace(/_/g, " ").toLowerCase() : "?");
+        $("importSaveSummary").innerHTML =
+          `<b>${escapeText(preview.filename)}</b><br>` +
+          `${preview.width} × ${preview.height} · 턴 ${preview.turn_estimate ?? "?"}(추정) · ` +
+          `${escapeText(speedName[preview.game_speed_in_save] || plain(header.game_speed, "GAMESPEED_"))} 속도 · ` +
+          `${escapeText(plain(header.ruleset, "RULESET_"))} · ${escapeText(plain(header.difficulty, "DIFFICULTY_"))} · ${escapeText(header.map_script || "")}<br>` +
+          `도시 ${preview.stats.cities} · 특수지구 ${preview.stats.districts} · 강 타일 ${preview.stats.river_tiles}` +
+          (Object.keys(preview.unknown_types || {}).length ? ` · 이름 모르는 타입 ${Object.keys(preview.unknown_types).length}종` : "");
+        const select = $("importSavePlayer");
+        select.replaceChildren();
+        for (const player of preview.players) {
+          if (!player.importable) continue;
+          const option = document.createElement("option");
+          option.value = String(player.index);
+          option.textContent = `${player.index}. ${player.label} — 도시 ${player.cities}`;
+          select.appendChild(option);
+        }
+        if (!select.options.length) {
+          setStatus("가져올 수 있는 도시가 있는 플레이어가 없습니다.");
+          return;
+        }
+        if (preview.default_player !== null && preview.default_player !== undefined)
+          select.value = String(preview.default_player);
+        const showCities = () => {
+          const player = preview.players.find((p) => String(p.index) === select.value);
+          $("importSavePlayerCities").textContent = player
+            ? `도시: ${player.city_names.join(", ")}${player.cities > player.city_names.length ? " …" : ""}`
+            : "";
+        };
+        select.onchange = showCities;
+        showCities();
+        $("importSaveDecoded").innerHTML = (preview.decoded || []).map((x) => `<li>${escapeText(x)}</li>`).join("");
+        $("importSaveNotDecoded").innerHTML = (preview.not_decoded || []).map((x) => `<li>${escapeText(x)}</li>`).join("");
+        $("importSaveWarnings").innerHTML = (preview.warnings || []).map((x) => `<p>⚠ ${escapeText(x)}</p>`).join("");
+        if ((await waitForDialog($("importSaveDialog"))) !== "import") {
+          setStatus("세이브 가져오기를 취소했습니다.");
+          return;
+        }
+        await applySavePlayer(preview, Number(select.value), $("importSaveAutoAssign").checked);
+      }
+      // Builds the game for one player of the decoded save (also used by the civ switcher).
+      async function applySavePlayer(preview, player, autoAssign) {
+        setStatus("세이브를 지도로 변환하는 중…");
+        loadProgress(null, "지도·도시 문서 만드는 중…");
+        let result;
+        try {
+          const response = await fetch("/api/import/civ6save/apply", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: preview.token, player, auto_assign: autoAssign }),
+          });
+          result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            loadDone();
+            setStatus(result.detail || `세이브 가져오기 실패 (${response.status})`);
+            return;
+          }
+        } catch (error) {
+          loadDone();
+          setStatus(`세이브 가져오기 요청 실패: ${error.message}`);
+          return;
+        }
+        loadProgress(70, "모든 도시 산출 계산 중…");
+        await applyLoadedDocuments(result, `Imported ${preview.filename}`);
+        loadDone();
+        state.lastSavePreview = preview;
+        renderCivSwitch(preview, player);
+        const report = result.import_report || {};
+        $("mapTitle").textContent =
+          `세이브 ${preview.filename} · ${report.player_label || ""} · 지도 ${state.map.width} × ${state.map.height}`;
+        const capital = state.cities.find((c) => (c.buildings || []).includes("BUILDING_PALACE"));
+        if (capital) selectCity(capital.id);
+        const warnings = report.warnings || [];
+        $("mapTitle").title = warnings.length ? `가져오기 주의:\n- ${warnings.join("\n- ")}` : "";
+        setStatus(
+          `세이브 가져오기 완료: ${report.player_label} 도시 ${report.cities}곳(시민 배치 세이브 값 ${report.citizens_from_save}곳), ` +
+          `다른 문명 도시 ${report.foreign_cities}곳 표시. [저장]을 눌러야 파일에 기록됩니다.` +
+          (warnings.length ? ` 주의: ${warnings.join(" / ")}` : ""),
+        );
+      }
+      function renderCivSwitch(preview, current) {
+        const box = $("civSwitch");
+        if (!box) return;
+        const players = (preview.players || []).filter((p) => p.importable);
+        box.hidden = players.length < 2;
+        box.innerHTML = `<option value="">다른 문명 보기…</option>` + players
+          .map((p) => `<option value="${p.index}" ${p.index === current ? "disabled" : ""}>${escapeText(p.label)} — 도시 ${p.cities}${p.index === current ? " (지금)" : ""}</option>`)
+          .join("");
+        box.onchange = async () => {
+          const player = Number(box.value);
+          box.value = "";
+          if (Number.isNaN(player)) return;
+          if (!confirm("현재 게임을 이 문명 기준으로 다시 만듭니다. 저장하지 않은 변경은 사라집니다. 계속할까요?")) return;
+          await applySavePlayer(preview, player, false);
+        };
+      }
       async function loadSavedMap() {
         let savedMaps;
         try {
@@ -2133,37 +3473,7 @@
           setStatus(`저장본 불러오기 요청 실패: ${error.message}`);
           return;
         }
-        state.map = result.map;
-        state.cities = result.cities;
-        state.game = result.game_state || { turn: 1, units: [] };
-        state.selectedCityId = null;
-        state.selectedTile = {
-          x: Math.floor(state.map.width / 2),
-          y: Math.floor(state.map.height / 2),
-        };
-        setOptions(
-          "terrain",
-          [...new Set(state.map.tiles.map((tile) => tile.terrain))].map(
-            (id) => ({ id, label: codeLabel(id) }),
-          ),
-          "지형 선택",
-        );
-        $("mapTitle").textContent =
-          `지도 ${state.map.width} × ${state.map.height} · 타일 ${state.map.count.toLocaleString()}개`;
-        $("audit").textContent =
-          `Loaded saved map · ${state.map.width} × ${state.map.height} · ${state.map.count} tiles`;
-        $("metrics").replaceChildren();
-        $("yieldBreakdown").replaceChildren();
-        renderCities();
-        syncTileEditor();
-        drawMap();
-        fitMap();
-        await refreshResearchPanel();
-        if (state.cities.length) selectCity(state.cities[0].id);
-        else {
-          $("cityEditor").classList.add("hidden");
-          $("citySummary").textContent = "도시를 선택하거나 생성하세요.";
-        }
+        await applyLoadedDocuments(result, "Loaded saved map");
         setStatus("저장한 지도와 도시 데이터를 불러왔습니다.");
       }
       function makeChecks(containerId, items, attr, searchId, limit = 250) {
@@ -2216,9 +3526,9 @@
           const error = await rr.json().catch(() => ({}));
           throw new Error(error.detail || `게임 규칙을 불러오지 못했습니다 (${rr.status})`);
         }
-        if (health.version !== "0.3.0") {
+        if (health.version !== "0.5.1") {
           throw new Error(
-            "다른 버전의 서버가 실행 중입니다. 기대 버전 0.3.0 / 현재 " +
+            "다른 버전의 서버가 실행 중입니다. 기대 버전 0.5.1 / 현재 " +
               health.version,
           );
         }
@@ -2288,7 +3598,10 @@
         fitMap();
         await refreshResearchPanel();
         if (state.cities.length) selectCity(state.cities[0].id);
-        setStatus("MAP EDITOR v0.3.0 · 지도와 카탈로그 로드 완료");
+        setStatus(
+          "지도와 카탈로그 로드 완료 · 변경사항은 저장 버튼을 눌렀을 때만 파일에 기록됩니다.",
+        );
+        if (window.SimUI) await SimUI.init();
       }
       [
         "terrain",
@@ -2309,7 +3622,33 @@
       $("technologyResearchBtn").onclick = () =>
         selectResearch("technology");
       $("civicResearchBtn").onclick = () => selectResearch("civic");
+      $("technologyUnlockBtn").onclick = () =>
+        forceResearchAvailability("technology", true);
+      $("technologyLockBtn").onclick = () =>
+        forceResearchAvailability("technology", false);
+      $("civicUnlockBtn").onclick = () =>
+        forceResearchAvailability("civic", true);
+      $("civicLockBtn").onclick = () =>
+        forceResearchAvailability("civic", false);
+      $("forceCreateUnitBtn").onclick = forceCreateUnit;
+      $("forceDeleteUnitBtn").onclick = forceDeleteUnit;
+      $("forceAddEntityBtn").onclick = forceAddEntity;
+      $("forceEntityCategory").onchange = () =>
+        refreshForcedEntityOptions().catch((error) =>
+          setStatus(`강제 추가 조건 갱신 실패: ${error.message}`),
+        );
+      $("forceEntityType").onchange = () => {
+        $("forceAddEntityBtn").disabled =
+          !$("forceEntityType").selectedOptions[0] ||
+          $("forceEntityType").selectedOptions[0].disabled;
+      };
+      $("forceUnitType").onchange = () => {
+        $("forceCreateUnitBtn").disabled =
+          !$("forceUnitType").selectedOptions[0] ||
+          $("forceUnitType").selectedOptions[0].disabled;
+      };
       $("unitSelect").onchange = syncUnitControls;
+      $("builderImprovement").onchange = syncUnitControls;
       $("unitMoveBtn").onclick = () =>
         performUnitAction("move", {
           x: Number($("unitMoveX").value),
@@ -2326,6 +3665,11 @@
       $("saveMapBtn").onclick = saveMap;
       $("saveMapAsBtn").onclick = saveMapAs;
       $("loadSavedMapBtn").onclick = loadSavedMap;
+      $("importSaveBtn").onclick = () => {
+        $("importSaveFile").value = "";
+        $("importSaveFile").click();
+      };
+      $("importSaveFile").onchange = (event) => importCiv6Save(event.target.files[0]);
       $("zoomIn").onclick = () =>
         zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1.25);
       $("zoomOut").onclick = () =>
@@ -2336,7 +3680,61 @@
         drawMap();
       };
       window.addEventListener("resize", resizeCanvas);
-      init().catch((e) => setStatus("초기화 실패: " + e.message));
+      // First run: the game's rule data is not shipped. Build it from the
+      // user's own installation before loading the map.
+      async function setupGate() {
+        const status = await fetch("/api/setup/status", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+        if (!status || status.ready) return true;
+        const box = $("setupScreen");
+        box.hidden = false;
+        document.body.classList.add("setup-mode");
+        const input = $("setupPath");
+        input.value = (status.suggestions[0] && status.suggestions[0].path) || "";
+        $("setupFound").innerHTML = status.suggestions.length
+          ? status.suggestions.map((s) => `<button type="button" class="mini setup-pick" data-path="${escapeText(s.path)}">${escapeText(s.path)}${s.dlc ? " (DLC 포함 / with DLC)" : " (DLC 없음 / no DLC)"}</button>`).join("")
+          : "<span class=\"muted\">자동으로 찾은 폴더 없음 / No folder found automatically</span>";
+        document.querySelectorAll(".setup-pick").forEach((b) => (b.onclick = () => (input.value = b.dataset.path)));
+        return new Promise((resolve) => {
+          $("setupStart").onclick = async () => {
+            $("setupError").textContent = "";
+            const response = await fetch("/api/setup/build", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path: input.value }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) { $("setupError").textContent = data.detail || `오류 / Error ${response.status}`; return; }
+            $("setupStart").disabled = true;
+            const poll = setInterval(async () => {
+              const st = await fetch("/api/setup/status", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+              if (!st) return;
+              loadProgress(st.job.pct, st.job.message);
+              if (st.job.state === "done") { clearInterval(poll); loadDone(); location.reload(); resolve(false); }
+              if (st.job.state === "error") {
+                clearInterval(poll); loadDone(); $("setupStart").disabled = false;
+                $("setupError").textContent = st.job.error || "실패 / Failed";
+              }
+            }, 700);
+          };
+        });
+      }
+      setupGate()
+        .then((ready) => ready && init())
+        .catch((e) => setStatus("초기화 실패: " + e.message));
     </script>
+    <script src="/static/sim.js"></script>
+    <div id="loadBar" class="load-bar" hidden>
+      <div class="load-bar-track"><div class="load-bar-fill" id="loadBarFill"></div></div>
+      <div class="load-bar-text"><span id="loadBarLabel">불러오는 중…</span><span id="loadBarPct"></span></div>
+    </div>
+    <style>
+      .load-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: rgba(9, 16, 21, 0.96);
+        border-bottom: 1px solid #d6ad59; padding: 8px 16px 10px; box-shadow: 0 4px 18px rgba(0,0,0,0.5); }
+      .load-bar-track { height: 10px; border-radius: 6px; background: #1d2c35; overflow: hidden; }
+      .load-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #d6ad59, #f3d68b); border-radius: 6px;
+        transition: width 0.25s ease; }
+      .load-bar.indeterminate .load-bar-fill { width: 35% !important; animation: loadSlide 1.1s ease-in-out infinite; }
+      @keyframes loadSlide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+      .load-bar-text { display: flex; justify-content: space-between; margin-top: 6px; font-size: 13px; color: #f1e6c8; }
+    </style>
   </body>
 </html>

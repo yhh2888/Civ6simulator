@@ -1,5 +1,10 @@
 {
   "schema_version": 2,
+  "game_speed": "STANDARD",
+  "food": {
+    "food_per_population": 2.0,
+    "max_growths_per_turn": 1
+  },
   "city": {
     "minimum_distance": 3,
     "initial_population": 1,
