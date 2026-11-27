@@ -54,7 +54,7 @@ def _candidates() -> list[Path]:
     return roots
 
 
-def resolve(root: str | Path) -> dict[str, Path | None]:
+def resolve(root: str | Path, extract: bool = True) -> dict[str, Path | None]:
     """Find the base Data folder (or Data.zip) and the DLC folder under ``root``."""
     path = Path(str(root).strip().strip('"')).expanduser()
     if not path.exists():
@@ -72,10 +72,30 @@ def resolve(root: str | Path) -> dict[str, Path | None]:
         raise ApplicationError(422, "기본 게임 데이터(Base/Assets/Gameplay/Data)를 찾지 못했습니다. "
                                     "/ Could not find Base/Assets/Gameplay/Data under this path.")
     dlc = None
-    for candidate in (path / "DLC", path.parent / "DLC" if path.is_file() else None):
-        if candidate is not None and candidate.is_dir() and any(candidate.glob("*/*.modinfo")):
+    folder = path.parent if path.is_file() else path
+    candidates = [path / "DLC", folder / "DLC", folder / "civ6_dlc_data"]
+    candidates += sorted(p for p in folder.iterdir() if p.is_dir()) if folder.is_dir() else []
+    for candidate in candidates:
+        if candidate.is_dir() and any(candidate.glob("*/*.modinfo")):
             dlc = candidate
             break
+    if dlc is None and folder.is_dir():
+        # A zipped DLC folder next to Data.zip (e.g. civ6_dlc_data.zip): unpack it once.
+        for archive in sorted(folder.glob("*.zip")):
+            if archive == path or not zipfile.is_zipfile(archive):
+                continue
+            with zipfile.ZipFile(archive) as zf:
+                if not any(n.endswith(".modinfo") for n in zf.namelist()):
+                    continue
+                if not extract:
+                    dlc = archive
+                    break
+                target = paths.DATA / "game_data_dlc"
+                zf.extractall(target)
+            roots = [p.parent.parent for p in target.glob("**/*.modinfo")]
+            if roots:
+                dlc = min(roots, key=lambda p: len(p.parts))
+                break
     return {"base": base, "dlc": dlc}
 
 
@@ -86,7 +106,7 @@ def status() -> dict[str, Any]:
     for candidate in _candidates():
         try:
             if candidate.exists():
-                resolved = resolve(candidate)
+                resolved = resolve(candidate, extract=False)
                 found.append({"path": str(candidate), "dlc": resolved["dlc"] is not None})
         except (ApplicationError, OSError):
             continue

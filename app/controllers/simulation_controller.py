@@ -49,6 +49,21 @@ def sim_city_ledger(city_id: str, scenario_id: str | None = None):
     return sim.city_ledger(city_id, scenario_id)
 
 
+@router.get("/api/sim/difficulties")
+def sim_difficulties(scenario_id: str | None = None):
+    return sim.get_difficulties(scenario_id)
+
+
+@router.put("/api/sim/difficulties")
+def sim_update_difficulties(payload: dict, scenario_id: str | None = None):
+    return sim.update_difficulties(payload, scenario_id)
+
+
+@router.get("/api/sim/ledger/yield/{yield_key}")
+def sim_empire_ledger(yield_key: str, scenario_id: str | None = None):
+    return sim.empire_ledger(yield_key, scenario_id)
+
+
 @router.get("/api/sim/cities/{city_id}/ledger.csv")
 def sim_city_ledger_csv(city_id: str, scenario_id: str | None = None):
     text, filename = sim.city_ledger_csv(city_id, scenario_id)

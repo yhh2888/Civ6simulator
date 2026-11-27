@@ -217,3 +217,21 @@ table.ledger th.num, table.ledger td.num { min-width: 44px; white-space: nowrap;
 .import-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .import-warnings p { margin: 6px 0 0; font-size: 12px; color: #f2c46d; }
 @media (max-width: 640px) { .import-columns { grid-template-columns: 1fr; } }
+#simYieldLedger a[data-pick] { color: inherit; font-weight: 600; text-decoration: underline dotted; }
+#simYieldLedger tr.yl-city { cursor: pointer; }
+#simYieldLedger tr.yl-city:hover { background: rgba(255, 255, 255, 0.04); }
+.yl-pick { display: inline-flex; gap: 4px; margin: 0 8px; }
+details.tile-adjust { margin-top: 8px; }
+details.tile-adjust summary { cursor: pointer; font-size: 12px; }
+ul.gov-promos { list-style: none; padding-left: 0; margin: 6px 0 0; }
+ul.gov-promos li { margin: 2px 0; }
+dialog.difficulty-dialog { width: min(980px, calc(100% - 32px)); max-height: 90vh; overflow: auto; }
+.difficulty-dialog th { white-space: nowrap; }
+.difficulty-dialog #difficultyTable td:nth-child(2) { min-width: 220px; }
+.difficulty-dialog .bonus-input { width: 4.2em; text-align: right; padding: 1px 3px; }
+.difficulty-dialog td.overridden { background: rgba(255, 200, 0, 0.22); }
+.difficulty-dialog h3 { font-size: 12px; margin: 12px 0 4px; color: var(--muted, #9fb0b6); font-weight: 600; }
+.difficulty-dialog table.grid { width: 100%; font-size: 12px; }
+.difficulty-dialog tr.current td { background: rgba(255, 255, 255, 0.04); }
+.difficulty-dialog tr.yields td { font-weight: 500; }
+.difficulty-dialog .form-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }

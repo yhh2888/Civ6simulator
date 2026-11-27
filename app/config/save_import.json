@@ -1,0 +1,5 @@
+{
+  "_설명": "세이브 가져오기 옵션. apply_amenity_effects: 가져온 도시에 쾌적도 효과(성장·산출 %)를 켤지. spectator_all_ai: 관전 세이브면 모든 문명을 AI로 둘지.",
+  "apply_amenity_effects": true,
+  "spectator_all_ai": true
+}

@@ -48,6 +48,7 @@ SOURCE_LINKS = (
 SUPPORTED_EFFECTS = {
     "EFFECT_ADJUST_CITY_YIELD_CHANGE": "도시 산출량 고정 증감",
     "EFFECT_ADJUST_CITY_YIELD_MODIFIER": "도시 산출량 % 증감",
+    "EFFECT_ADJUST_CITY_GREATWORK_YIELD": "걸작 종류별 산출 증감",
     "EFFECT_ADJUST_PLOT_YIELD": "타일 산출량 증감",
     "EFFECT_ADJUST_BUILDING_YIELD_CHANGE": "건물 산출량 고정 증감",
     "EFFECT_ADJUST_BUILDING_YIELD_MODIFIER": "건물 산출량 % 증감",
@@ -57,6 +58,8 @@ SUPPORTED_EFFECTS = {
     "EFFECT_DISTRICT_ADJACENCY": "추가 특수지구 인접 규칙(인접 특수지구)",
     "EFFECT_TERRAIN_ADJACENCY": "추가 특수지구 인접 규칙(지형)",
     "EFFECT_FEATURE_ADJACENCY": "추가 특수지구 인접 규칙(지형 특성)",
+    "EFFECT_IMPROVEMENT_ADJACENCY": "추가 특수지구 인접 규칙(시설)",
+    "EFFECT_ADJUST_DISTRICT_YIELD_BASED_ON_ADJACENCY_BONUS": "특수지구 인접 보너스만큼 다른 산출 추가",
     "EFFECT_ADJUST_POLICY_HOUSING": "주거공간 증감",
     "EFFECT_ADJUST_POLICY_AMENITY": "쾌적도 증감",
     "EFFECT_ADJUST_CITY_GROWTH": "성장률 % 증감",
@@ -75,6 +78,9 @@ SUPPORTED_EFFECTS = {
     "EFFECT_ADJUST_TRADE_ROUTE_YIELD_FOR_INTERNATIONAL": "국제 교역로 산출량 증감(입력한 교역로에만)",
     "EFFECT_ADJUST_CITY_TRADE_ROUTE_YIELD_FOR_DOMESTIC": "도시의 국내 교역로 산출량 증감(입력한 교역로에만)",
     "EFFECT_ADJUST_CITY_TRADE_ROUTE_YIELD_FOR_INTERNATIONAL": "도시의 국제 교역로 산출량 증감(입력한 교역로에만)",
+    "EFFECT_ADJUST_TRADE_ROUTE_YIELD_FROM_OTHERS": "다른 문명·도시국가에서 들어오는 교역로(수입 교역로)의 도착 도시 산출 증감",
+    "EFFECT_ADJUST_CITY_YIELD_PER_POPULATION": "인구 1명당 도시 산출 +N",
+    "EFFECT_ADJUST_ALL_DISTRICTS_PRODUCTION": "모든 특수지구 생산 % 보너스",
 }
 
 # Effects that clearly influence city economy but are not simulated yet.
@@ -84,7 +90,6 @@ ECONOMY_RELATED_UNSUPPORTED = {
     "EFFECT_ADJUST_GREAT_PERSON_POINTS",
     "EFFECT_ADJUST_DISTRICT_GREAT_PERSON_POINTS",
     "EFFECT_ADJUST_GREAT_PERSON_POINTS_PERCENT",
-    "EFFECT_ADJUST_CITY_GREATWORK_YIELD",
     "EFFECT_ADJUST_CITY_TOURISM",
     "EFFECT_ADJUST_BONUS_RATE",
     "EFFECT_ADJUST_ACCUMULATING_BONUS",
@@ -94,7 +99,6 @@ ECONOMY_RELATED_UNSUPPORTED = {
     "EFFECT_ADJUST_UNIT_MAINTENANCE_DISCOUNT",
     "EFFECT_ADJUST_PLOT_PURCHASE_COST",
     "EFFECT_ADJUST_PLAYER_GOVERNMENT_SLOT_TYPE",
-    "EFFECT_ADJUST_CITY_YIELD_PER_POPULATION",
 }
 
 SUPPORTED_COLLECTIONS = {
@@ -208,6 +212,12 @@ class ModifierEngine:
         for row in self.ctx.db.group("ModifierArguments", "ModifierId").get(modifier_id, []):
             if row.get("Name"):
                 args[row["Name"]] = row.get("Value")
+                if row.get("Type") == "LinearScaleFromDefaultHandicap":
+                    from app.services.difficulty_service import scaled_amount
+
+                    amount = scaled_amount(self.ctx.db, row, self.ctx.player.handicap)
+                    if amount is not None:
+                        args[row["Name"]] = f"{amount:g}"
         return args
 
     def dynamic(self, modifier_type: str | None) -> tuple[str | None, str | None]:
@@ -245,6 +255,33 @@ class ModifierEngine:
                 result.append(("city_state", source_id, player_subject(), modifier_id))
             for item in skipped:
                 self._skip("requirement_unsupported", "city_state", item["source_id"], item["modifier_id"], item["reason"])
+        # World Congress: resolutions whose chosen effect attaches a modifier
+        # to the target player apply when this player is the target.
+        effects = ctx.db.group("ResolutionEffects", "ResolutionType")
+        for item in player.world_congress:
+            if not item.get("targets_me"):
+                continue
+            for row in effects.get(item.get("resolution"), []):
+                if str(row.get("WhichEffect")) != str(item.get("effect")) or not row.get("ModifierId"):
+                    continue
+                outer = self.modifier_row(row["ModifierId"]) or {}
+                if outer.get("ModifierType") == "MODIFIER_CONGRESS_ATTACH_MODIFIER_TO_PLAYERTYPE":
+                    inner = self.modifier_args(row["ModifierId"]).get("ModifierId")
+                    if inner:
+                        result.append(("congress", item["resolution"], player_subject(), inner))
+                else:
+                    self._skip("requirement_unsupported", "congress", item["resolution"], row["ModifierId"],
+                               "대상이 플레이어가 아닌 결의 효과는 대상 판정을 지원하지 않음")
+        # Governors: promotions apply to their city once established.
+        promotion_links = ctx.db.group("GovernorPromotionModifiers", "GovernorPromotionType")
+        for city_id, view in sorted(ctx.city_views.items()):
+            city = view.city
+            if not city.get("governor") or city.get("governor_established") is False:
+                continue
+            for promotion in city.get("governor_promotions") or []:
+                for row in promotion_links.get(promotion, []):
+                    if row.get("ModifierId"):
+                        result.append(("governor", promotion, city_subject(city_id), row["ModifierId"]))
         building_links = ctx.db.group("BuildingModifiers", "BuildingType")
         district_links = ctx.db.group("DistrictModifiers", "DistrictType")
         improvement_links = ctx.db.group("ImprovementModifiers", "ImprovementType")

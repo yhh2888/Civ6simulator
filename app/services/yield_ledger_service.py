@@ -41,18 +41,20 @@ SECTION_LABELS = {
     "buildings": "건물·불가사의",
     "great_works": "걸작 (도시에 넣은 것)",
     "trade_routes": "교역로 (출발 도시 몫)",
+    "incoming_routes": "수입 교역로 (다른 문명·도시국가 상인이 이 도시로)",
     "build_bonus": "현재 생산 항목 보너스 (건물·특수지구·불가사의 / 유닛)",
     "modifiers": "정책·특성 등 도시 Modifier",
     "custom": "사용자 정의 효과",
     "projects": "프로젝트 산출 전환",
     "percent": "% 보정",
 }
-SECTION_ORDER = ["tiles", "specialists", "population", "districts", "buildings", "great_works", "trade_routes", "build_bonus",
-                 "modifiers", "custom", "projects"]
+SECTION_ORDER = ["tiles", "specialists", "population", "districts", "buildings", "great_works", "trade_routes", "incoming_routes",
+                 "build_bonus", "modifiers", "custom", "projects"]
 LINK_TABLES = {
     "government": "GovernmentModifiers", "policy": "PolicyModifiers", "trait": "TraitModifiers",
     "technology": "TechnologyModifiers", "civic": "CivicModifiers", "belief": "BeliefModifiers",
     "building": "BuildingModifiers", "district": "DistrictModifiers", "improvement": "ImprovementModifiers",
+    "governor": "GovernorPromotionModifiers", "congress": "ResolutionEffects",
 }
 XML_REFS = {
     "terrain": ("Terrain_YieldChanges", "TerrainType"),
@@ -126,7 +128,7 @@ def modifier_source(ctx: EngineContext, attribution: dict) -> dict:
 
 
 def config_source(path: str, note: str | None = None) -> dict:
-    return {"origin": "game_rules.json", "file": "app/data/game_rules.json", "table": None, "key": path,
+    return {"origin": "game_rules.json", "file": "app/config/game_rules.json", "table": None, "key": path,
             "rows": [], "note": note}
 
 
@@ -196,6 +198,12 @@ def _component_source(ctx: EngineContext, component: dict, origin_note: str | No
         source = xml_source(ctx, "District_TradeRouteYields", "DistrictType", component.get("id"))
         source["note"] = f"열 {component.get('column')} 사용"
         return source
+    if kind == "event_yields":
+        return {"origin": "세이브", "file": None, "table": None, "key": "map plot yield changes", "rows": [],
+                "note": "RandomEvent_Yields 확률로 정해진 결과를 세이브에서 그대로 읽음"}
+    if kind == "user_tile":
+        return {"origin": "사용자 입력", "file": None, "table": None,
+                "key": f"city.tile_adjustments[{component.get('id')}]", "rows": [], "note": "게임 데이터가 아님"}
     if kind in ("user_effect",):
         return {"origin": "사용자 입력", "file": None, "table": None, "key": f"city.custom_effects[{component.get('id')}]",
                 "rows": [], "note": "게임 데이터가 아님"}
@@ -257,9 +265,10 @@ def _trade_route_ledger(ctx: EngineContext, result: dict) -> list[dict]:
     return routes
 
 
-def build_ledger(ctx: EngineContext, city_id: str, book: EffectBook | None = None) -> dict[str, Any]:
+def build_ledger(ctx: EngineContext, city_id: str, book: EffectBook | None = None,
+                 state: dict | None = None) -> dict[str, Any]:
     book = book or run_modifiers(ctx)
-    state = evaluate(ctx, book)
+    state = state or evaluate(ctx, book)
     city_eval = state["cities"][city_id]
     result = city_eval["yields"]
     ledger = _Ledger(ctx)
@@ -283,7 +292,7 @@ def build_ledger(ctx: EngineContext, city_id: str, book: EffectBook | None = Non
             ledger.add("population", component["label"], "population", component["label"], component["yields"],
                        f"{component['label']} = {yields_text(component['yields'])}", source)
     # 4. districts, 5. buildings (one group per district/building)
-    for section in ("districts", "buildings", "great_works", "trade_routes", "build_bonus"):
+    for section in ("districts", "buildings", "great_works", "trade_routes", "incoming_routes", "build_bonus"):
         for component in components:
             if component["category"] != section:
                 continue
@@ -307,13 +316,16 @@ def build_ledger(ctx: EngineContext, city_id: str, book: EffectBook | None = Non
     for item in (percent_component or {}).get("details") or []:
         yields = zero_yields()
         keys = [k for k in YIELD_KEYS if k != "Food"] if item.get("yield") == "NonFood" else [item.get("yield")]
+        pct = as_float(item.get("effective", item.get("percent")))
         for key in keys:
             if key in yields:
-                yields[key] = subtotal[key] * as_float(item.get("percent")) / 100.0
+                yields[key] = subtotal[key] * pct / 100.0
+        shown = (f"{as_float(item.get('percent')):+g}%→{pct:+.3f}%" if abs(pct - as_float(item.get("percent"))) > 1e-9
+                 else f"{pct:+g}%")
         formula = "; ".join(
-            f"{YL[k]} 소계 {subtotal[k]:.2f} × {as_float(item.get('percent')):+g}% = {_fmt(yields[k])}"
+            f"{YL[k]} 소계 {subtotal[k]:.2f} × {shown} = {_fmt(yields[k])}"
             for k in keys if k in yields and abs(subtotal[k]) > EPS
-        ) or f"{as_float(item.get('percent')):+g}% (소계 0)"
+        ) or f"{shown} (소계 0)"
         if item.get("attribution"):
             source = modifier_source(ctx, item["attribution"])
         elif item.get("source"):
@@ -349,7 +361,7 @@ def build_ledger(ctx: EngineContext, city_id: str, book: EffectBook | None = Non
         "data_origin": {
             "base_yields": "Data.zip (rules_db.json)" if ctx.db.available else "catalog.json (rules_db.json 없음)",
             "rules_db": ctx.db.meta,
-            "config": "app/data/game_rules.json",
+            "config": "app/config/game_rules.json",
         },
         "lines": ledger.lines,
         "sections": [
@@ -520,3 +532,40 @@ def ledger_csv(ledger: dict) -> str:
     for line in ledger["growth"]:
         writer.writerow([line["label"], line["value"], line["formula"], line.get("source") or ""])
     return "﻿" + buffer.getvalue()
+
+
+def empire_yield_ledger(ctx: EngineContext, yield_key: str) -> dict[str, Any]:
+    """One yield across every city: per-city section totals and the lines
+    that produce it (same engine run as the city ledgers)."""
+    if yield_key not in YIELD_KEYS:
+        from app.core.exceptions import ApplicationError
+
+        raise ApplicationError(422, f"yield는 {', '.join(YIELD_KEYS)} 중 하나입니다.")
+    book = run_modifiers(ctx)
+    state = evaluate(ctx, book)
+    cities, columns, grand = [], [], 0.0
+    for city_id in sorted(ctx.city_views, key=lambda c: ctx.city_views[c].city.get("name", c)):
+        ledger = build_ledger(ctx, city_id, book, state)
+        sections = {}
+        lines = []
+        for line in ledger["lines"]:
+            value = line["yields"].get(yield_key, 0.0)
+            if abs(value) <= EPS:
+                continue
+            sections[line["section"]] = sections.get(line["section"], 0.0) + value
+            lines.append({"section": line["section"], "group": line["group"], "label": line["label"],
+                          "location": line["location"], "value": round(value, 4), "formula": line["formula"]})
+        for section in sections:
+            if section not in columns:
+                columns.append(section)
+        total = ledger["totals"].get(yield_key, 0.0)
+        grand += total
+        cities.append({"city_id": city_id, "name": ledger["name"], "population": state["cities"][city_id]["yields"]["population"],
+                       "total": total, "sections": {k: round(v, 4) for k, v in sections.items()}, "lines": lines,
+                       "reconciled": ledger["reconciliation"]["ok"]})
+    order = SECTION_ORDER + ["percent"]
+    columns.sort(key=lambda s: order.index(s) if s in order else len(order))
+    return {"yield": yield_key, "yield_label": YL[yield_key], "turn": state["turn"],
+            "columns": [{"id": s, "label": SECTION_LABELS.get(s, s)} for s in columns],
+            "cities": cities, "total": round(grand, 4),
+            "section_totals": {s: round(sum(c["sections"].get(s, 0.0) for c in cities), 4) for s in columns}}

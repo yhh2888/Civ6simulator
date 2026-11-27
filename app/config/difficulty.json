@@ -1,0 +1,12 @@
+{
+  "_설명": "bonus_overrides: {모디파이어 ID: {난이도: 값}}. 게임 데이터 값 대신 이 값을 씁니다. 난이도 설정 창의 보너스 표에서 고치고 저장하면 여기에 기록됩니다.",
+  "_설명_ai_extra": "ai_extra_percent: AI 문명 도시에 더하는 % (게임 데이터에 없는 값). 관전 세이브 31턴 황제 AI에서 과학·생산·금 +6%가 맞았습니다. ai_extra_min_level 이상 난이도의 AI에만 적용.",
+  "default_level": "DIFFICULTY_PRINCE",
+  "bonus_overrides": {},
+  "ai_extra_percent": {
+    "Science": 6,
+    "Production": 6,
+    "Gold": 6
+  },
+  "ai_extra_min_level": "DIFFICULTY_PRINCE"
+}

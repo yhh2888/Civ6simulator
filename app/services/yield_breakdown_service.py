@@ -263,6 +263,14 @@ def compute_tile(
         values = _yields(tables.feature[feature_id])
         add_into(total, values)
         components.append(_component("tile", "feature", feature_id, f"지형 특성 {feature_id}", values))
+    events = tile.get("event_yields")
+    if isinstance(events, dict):
+        values = _yields(events)
+        if any(values.values()):
+            add_into(total, values)
+            components.append(_component("tile", "event_yields", "PLOT_YIELD_CHANGES",
+                                         "자연재해로 늘어난 산출 (범람·화산·폭풍 등, 세이브 값)", values,
+                                         source="세이브 지도 구역의 타일별 산출 변화 목록"))
     resource_id = tile.get("resource")
     if resource_id and resource_id in tables.resource:
         values = _yields(tables.resource[resource_id])
@@ -286,7 +294,14 @@ def compute_tile(
     if improvement_id and is_center:
         excluded.append({"kind": "improvement", "id": improvement_id, "label": f"시설 {improvement_id}",
                          "reason": "도심 타일의 시설은 계산하지 않음", "table": "Improvement_YieldChanges", "key": improvement_id})
-    if improvement_id and not is_center:
+    if improvement_id and not is_center and tile.get("improvement_pillaged"):
+        excluded.append({"kind": "improvement", "id": improvement_id, "label": f"시설 {improvement_id} (약탈됨)",
+                         "reason": "약탈된 시설은 수리 전까지 산출이 없음 (세이브의 약탈 표시)",
+                         "table": "Improvement_YieldChanges", "key": improvement_id})
+        components.append(_component("tile", "improvement_pillaged", improvement_id,
+                                     f"시설 {improvement_id} (약탈됨: 산출 없음)", zero_yields(),
+                                     source="세이브 타일 기록의 약탈 표시"))
+    elif improvement_id and not is_center:
         if improvement_id in tables.improvement:
             values = _yields(tables.improvement[improvement_id])
             add_into(total, values)
@@ -371,6 +386,17 @@ def compute_tile(
             add_into(total, floor)
             components.append(_component("tile", "center_minimum", "CITY_CENTER", "도심 최소 산출량", floor,
                                          source="game_rules.json city_center_min_yields"))
+    # User correction for this plot (e.g. river flood bonuses the save does
+    # not store): added as typed, shown as its own line.
+    owner = ctx.cities.get(city_id) if city_id else None
+    adjust = ((owner or {}).get("tile_adjustments") or {}).get(tile_key(tile["x"], tile["y"]))
+    if isinstance(adjust, dict):
+        values = _yields(adjust.get("yields"))
+        if any(values.values()):
+            add_into(total, values)
+            components.append(_component("tile", "user_tile", tile_key(tile["x"], tile["y"]),
+                                         f"수동 보정: {adjust.get('note') or '게임 값에 맞춤'}", values,
+                                         source="사용자 입력 (게임 데이터 아님)"))
     return {
         "x": tile["x"],
         "y": tile["y"],
@@ -470,15 +496,22 @@ def district_adjacency(ctx: EngineContext, book: EffectBook, city_id: str) -> li
     extra_rules = [
         record
         for record in book.records
-        if record.effect in ("EFFECT_DISTRICT_ADJACENCY", "EFFECT_TERRAIN_ADJACENCY", "EFFECT_FEATURE_ADJACENCY")
+        if record.effect in ("EFFECT_DISTRICT_ADJACENCY", "EFFECT_TERRAIN_ADJACENCY", "EFFECT_FEATURE_ADJACENCY",
+                             "EFFECT_IMPROVEMENT_ADJACENCY")
         and record.subject.city_id == city_id
     ]
+    tiles = list(view.district_tiles)
+    # The city centre only takes modifier-added rules (Mali: +1 food, +1 faith
+    # per adjacent desert / desert hills).
+    center_tile = ctx.tile_index.get(view.center)
+    if center_tile is not None and any(r.data.get("DistrictType") == "DISTRICT_CITY_CENTER" for r in extra_rules):
+        tiles.append({**center_tile, "district": "DISTRICT_CITY_CENTER", "_center": True})
     results = []
-    for tile in view.district_tiles:
+    for tile in tiles:
         district_id = tile.get("district")
         if district_id == "DISTRICT_WONDER":
             continue
-        own_links = links.get(district_id, [])
+        own_links = [] if tile.get("_center") else links.get(district_id, [])
         if not own_links:
             for alias in sorted(ctx.district_aliases(district_id) - {district_id}):
                 own_links = links.get(alias, [])
@@ -516,7 +549,7 @@ def district_adjacency(ctx: EngineContext, book: EffectBook, city_id: str) -> li
         aliases = ctx.district_aliases(district_id)
         for record in extra_rules:
             data = record.data
-            if data.get("DistrictType") not in aliases:
+            if data.get("DistrictType") not in aliases and data.get("DistrictType") != district_id:
                 continue
             key = yield_key(data.get("YieldType"))
             if key is None:
@@ -526,6 +559,8 @@ def district_adjacency(ctx: EngineContext, book: EffectBook, city_id: str) -> li
                 pseudo = {"OtherDistrictAdjacent": "true"}
             elif record.effect == "EFFECT_TERRAIN_ADJACENCY":
                 pseudo = {"AdjacentTerrain": data.get("TerrainType")}
+            elif record.effect == "EFFECT_IMPROVEMENT_ADJACENCY":
+                pseudo = {"AdjacentImprovement": data.get("ImprovementType")}
             else:
                 pseudo = {"AdjacentFeature": data.get("FeatureType")}
             count, label = _adjacency_count(ctx, tile, pseudo, centers)
@@ -553,6 +588,17 @@ def district_adjacency(ctx: EngineContext, book: EffectBook, city_id: str) -> li
                     components.append(_component("district", "adjacency_percent", record.modifier_id,
                                                  f"{record.source_kind} {record.source_id}: 인접 보너스 % 증가", values,
                                                  attribution=record.attribution(), calc="; ".join(calc)))
+            elif record.effect == "EFFECT_ADJUST_DISTRICT_YIELD_BASED_ON_ADJACENCY_BONUS":
+                # Theodora: Holy Sites give Culture equal to their Faith adjacency.
+                mirror, grant = yield_key(record.data.get("YieldTypeToMirror")), yield_key(record.data.get("YieldTypeToGrant"))
+                if mirror and grant and adjacency.get(mirror):
+                    values = zero_yields()
+                    values[grant] = adjacency[mirror]
+                    add_into(total, values)
+                    components.append(_component("district", "adjacency_mirror", record.modifier_id,
+                                                 f"{record.source_kind} {record.source_id}", values,
+                                                 attribution=record.attribution(),
+                                                 calc=f"인접 {YL[mirror]} {adjacency[mirror]:g} → {YL[grant]} +{adjacency[mirror]:g}"))
             elif record.effect == "EFFECT_ADJUST_DISTRICT_BASE_YIELD_CHANGE":
                 values = zero_yields()
                 for key, amount in yield_pairs(record.data):
@@ -561,6 +607,8 @@ def district_adjacency(ctx: EngineContext, book: EffectBook, city_id: str) -> li
                 components.append(_component("district", "district_base", record.modifier_id,
                                              f"{record.source_kind} {record.source_id}", values,
                                              attribution=record.attribution(), calc=f"특수지구 기본 {_calc_flat(values)}"))
+        if tile.get("_center") and not any(total.values()):
+            continue
         results.append({
             "x": tile["x"], "y": tile["y"], "key": tile_key(tile["x"], tile["y"]),
             "id": district_id, "adjacency": clean_yields(adjacency),
@@ -672,6 +720,7 @@ def compute_city(
         tiles_out.append({"key": key, "x": tile["x"], "y": tile["y"], "worked": worked, "citizens": 1 if worked and not is_center else 0,
                           "city_center": is_center, "terrain": tile.get("terrain"), "feature": tile.get("feature"),
                           "resource": tile.get("resource"), "improvement": tile.get("improvement"),
+                          "improvement_pillaged": bool(tile.get("improvement_pillaged")),
                           "is_hills": result["is_hills"], "yields": result["yields"],
                           "components": result["components"], "excluded": result["excluded"],
                           "workable": not is_center,
@@ -685,10 +734,13 @@ def compute_city(
                   or bool((ctx.db.meta or {}).get("ruleset")))  # expansion rules: always the data values
     if use_params and ctx.db.has_param("SCIENCE_PERCENTAGE_YIELD_PER_POP"):
         per_pop = zero_yields()
-        # Exact percentages: Mediolanum (pop 5) shows culture +1.5 from
-        # citizens in game, so 30% is not truncated to 76/256 per citizen.
+        # 1/256 fixed point, rounded: 30 % → 77/256 per citizen. Mediolanum
+        # (pop 5) shows culture +1.5 (76/256 would give 1.48); Niani (pop 4,
+        # culture +39 %) shows 8.6 where exactly 0.3 gives 8.597.
+        fixed_point = ctx.settings.get("fixed_point_percent", True)
         for key, name in (("Science", "SCIENCE_PERCENTAGE_YIELD_PER_POP"), ("Culture", "CULTURE_PERCENTAGE_YIELD_PER_POP")):
-            per_pop[key] = (ctx.db.param(name, 0) or 0) / 100.0
+            pct = ctx.db.param(name, 0) or 0
+            per_pop[key] = math.floor(pct * 2.56 + 0.5) / 256 if fixed_point else pct / 100.0
         pop_source = "GlobalParameters SCIENCE/CULTURE_PERCENTAGE_YIELD_PER_POP"
     else:
         per_pop = _yields(ctx.rules["city"]["population_yields"])
@@ -714,6 +766,10 @@ def compute_city(
 
     # 5. buildings
     buildings_out = []
+    for building in city.get("pillaged_buildings") or []:
+        components.append(_component("buildings", "building_pillaged", building,
+                                     f"건물 {building} (약탈됨: 수리 전까지 산출·효과 없음)", zero_yields(),
+                                     source="세이브 도시 건물 표의 약탈 표시"))
     building_rows = ctx.db.index("Buildings", "BuildingType")
     for building in dict.fromkeys(view.buildings + view.wonders):
         direct = _yields(tables.building.get(building))
@@ -767,14 +823,32 @@ def compute_city(
 
     # 5a. great works placed in the city (entered on the city; not decoded)
     great_works = ctx.db.group("GreatWork_YieldChanges", "GreatWorkType")
+    work_rows = ctx.db.index("GreatWorks", "GreatWorkType")
+    # Per-object-type extras such as Kongo's Nkisi (+2 food, +2 production,
+    # +4 gold, +1 faith per relic, artifact and sculpture).
+    object_bonus = book.city_records(city_id, "EFFECT_ADJUST_CITY_GREATWORK_YIELD")
     for work in city.get("great_works") or []:
         values = zero_yields()
+        details = []
         for row in great_works.get(work, []):
             key = yield_key(row.get("YieldType"))
             if key:
                 values[key] += as_float(row.get("YieldChange"))
+        object_type = (work_rows.get(work) or {}).get("GreatWorkObjectType")
+        for record in object_bonus:
+            if object_type and record.data.get("GreatWorkObjectType") == object_type:
+                key = yield_key(record.data.get("YieldType"))
+                amount = as_float(record.data.get("YieldChange"))
+                if key and amount:
+                    values[key] += amount
+                    extra = zero_yields()
+                    extra[key] = amount
+                    details.append(_component("great_works", "great_work_bonus", record.modifier_id,
+                                              f"{record.source_kind} {record.source_id}", extra,
+                                              attribution=record.attribution()))
         if any(values.values()):
-            components.append(_component("great_works", "great_work", work, f"걸작 {work}", values))
+            components.append(_component("great_works", "great_work", work, f"걸작 {work}", values,
+                                         details=details or None))
             add("great_works", values)
 
     # 5b. trade routes (origin-city yields of routes entered on the city)
@@ -804,6 +878,22 @@ def compute_city(
                                          route_kind=destination["kind"], timing=route["timing"]))
             add("trade_routes", route["yields"])
 
+    # 5b'. incoming routes (other players' traders ending here): the
+    # destination gets only what …_FROM_OTHERS modifiers grant (e.g. the World
+    # Congress trade treaty: +4 gold per incoming route).
+    from app.services.trade_route_service import incoming_results
+
+    for route in incoming_results(ctx, book, city_id):
+        details = [_component("incoming_routes", "modifier", item["record"].modifier_id, item["label"], item["yields"],
+                              attribution=item["record"].attribution(),
+                              calc=f"수입 교역로 {_calc_flat(item['yields'])}")
+                   for item in route["details"]]
+        if any(route["yields"].values()):
+            components.append(_component("incoming_routes", "incoming_route", route["origin"],
+                                         f"수입 교역로 ← {route['origin_name']} ({route['origin']})",
+                                         route["yields"], details=details, origin=route["origin"]))
+            add("incoming_routes", route["yields"])
+
     # 5c. production toward the item being built (e.g. city-state envoys:
     # +1 toward buildings/districts/units). Counted in the city's production,
     # as the game's tooltip does ("buildings, districts and wonders +N").
@@ -832,6 +922,16 @@ def compute_city(
                                      f"{record.source_kind} {record.source_id}", values, attribution=record.attribution(),
                                      calc=f"도시 산출 {_calc_flat(values)}"))
         add("modifiers", values)
+    for record in book.city_records(city_id, "EFFECT_ADJUST_CITY_YIELD_PER_POPULATION"):
+        values = zero_yields()
+        for key, amount in yield_pairs(record.data):
+            values[key] += amount * population
+        if any(values.values()):
+            components.append(_component("modifiers", "per_population", record.modifier_id,
+                                         f"{record.source_kind} {record.source_id} × 인구 {population}",
+                                         values, attribution=record.attribution(),
+                                         calc=" · ".join(f"{YL[k]} {a:g} × 인구 {population}" for k, a in yield_pairs(record.data))))
+            add("modifiers", values)
     specialty_count = sum(1 for t in view.district_tiles if ctx.is_specialty_district(t.get("district", "")))
     for record in book.city_records(city_id, "EFFECT_ADJUST_CITY_YIELD_PER_DISTRICT"):
         values = zero_yields()
@@ -872,7 +972,13 @@ def compute_city(
     for record in book.city_records(city_id, "EFFECT_ADJUST_CITY_YIELD_MODIFIER"):
         for key, pct in yield_pairs(record.data):
             percent[key] += pct
-            percent_components.append({"yield": key, "percent": pct, "label": f"{record.source_kind} {record.source_id}",
+            label = f"{record.source_kind} {record.source_id}"
+            if "DIFFICULTY" in (record.modifier_id or ""):
+                from app.services.difficulty_service import LEVEL_KO
+
+                label = (f"난이도 보너스 ({LEVEL_KO.get(ctx.player.handicap, ctx.player.handicap)}, "
+                         f"{'플레이어' if ctx.player.is_human else 'AI'}) · {record.modifier_id}")
+            percent_components.append({"yield": key, "percent": pct, "label": label,
                                        "attribution": record.attribution()})
     for key, pct in custom_percent.items():
         if pct:
@@ -886,9 +992,26 @@ def compute_city(
             percent_components.append({"yield": "NonFood", "percent": pct,
                                        "label": f"쾌적도 상태 {amenity_state.get('happiness')}",
                                        "source": "XML Happinesses.NonFoodYieldModifier"})
+    # AI extra % (app/config/difficulty.json ai_extra_percent): seen in game,
+    # not in the game data.
+    from app.services.difficulty_service import ai_extra_percent
+
+    for key, pct in ai_extra_percent(ctx.player).items():
+        if pct:
+            percent[key] += pct
+            percent_components.append({"yield": key, "percent": pct, "label": "AI 추가 % (app/config/difficulty.json)",
+                                       "source": "설정값 (게임 데이터 아님)"})
+    # The game keeps each % modifier as a 1/256 fixed-point fraction, rounded
+    # one by one, and sums those (24 % → 61/256 = 23.83 %).
+    effective = zero_yields()
+    fixed_point = ctx.settings.get("fixed_point_percent", True)
+    for item in percent_components:
+        item["effective"] = (math.floor(item["percent"] * 2.56 + 0.5) / 2.56) if fixed_point else item["percent"]
+        for key in (list(NON_FOOD) if item["yield"] == "NonFood" else [item["yield"]]):
+            effective[key] += item["effective"]
     percent_values = zero_yields()
     for key in YIELD_KEYS:
-        percent_values[key] = subtotal[key] * percent[key] / 100.0
+        percent_values[key] = subtotal[key] * effective[key] / 100.0
     if any(percent_values.values()):
         components.append(_component("percent", "percent_total", None, "% 보정 합계", percent_values,
                                      details=percent_components))

@@ -31,3 +31,17 @@ async def preview_civ6save(request: Request):
 @router.post("/api/import/civ6save/apply")
 async def apply_civ6save(payload: dict):
     return await run_in_threadpool(save_import_service.apply_save_import, payload)
+
+
+@router.post("/api/import/civ6save/export-cities")
+async def export_city_yields(request: Request, header: bool = True):
+    """Body: raw .Civ6Save bytes. CSV of the studio's yields for every city of
+    every major civilization (header ``X-Filename`` names the save)."""
+    from fastapi.responses import Response
+
+    raw = await request.body()
+    if len(raw) > MAX_SAVE_BYTES:
+        raise ApplicationError(413, "세이브 파일이 너무 큽니다.")
+    filename = unquote(request.headers.get("x-filename") or "") or None
+    text = await run_in_threadpool(save_import_service.export_city_yields_csv, raw, filename, None, header)
+    return Response(content=text, media_type="text/csv; charset=utf-8")

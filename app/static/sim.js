@@ -25,6 +25,7 @@
     log: [], history: [], previewHistory: null, compare: null, compareSel: new Set(), lastReport: null,
     optimize: null, empireResult: null, coverage: null, audit: null, modAudit: null, validation: null,
     ledger: null, ledgerYield: "all", ledgerExcluded: true,
+    yieldLedger: null, yieldLedgerKey: "Gold", yieldLedgerOpen: new Set(), yieldLedgerStale: true,
     chartMetric: "Production", chartSource: "history", tiles: new Map(), suppress: 0, timer: null, busy: false,
   };
 
@@ -104,6 +105,7 @@
     if (key === "data" && !S.audit) void loadAudit();
     if (key === "chart") renderChart();
     if (key === "ledger" && (!S.ledger || S.ledgerCity !== (city() || {}).id)) void loadLedger();
+    if (key === "yieldledger" && (S.yieldLedgerStale || !S.yieldLedger)) void loadYieldLedger();
     if (key === "scenarios") renderScenarios();
   }
 
@@ -122,6 +124,8 @@
       renderCityCards();
       renderEmpireBox();
       drawMap();
+      S.yieldLedgerStale = true;
+      if (document.querySelector('[data-tabs="bottom"] .tab.active')?.dataset.tab === "yieldledger") void loadYieldLedger();
       await refreshCity();
     } catch (error) {
       status("시뮬레이션 상태를 불러오지 못했습니다: " + error.message);
@@ -380,6 +384,8 @@
       </tbody></table>
       <div class="form-row"><button type="button" class="mini" id="ovAddEffect">+ 효과 추가</button><button type="button" class="primary" id="ovSaveSettings">운영 설정 적용</button></div></div>
       ${renderTradeRoutes(cityDoc)}
+      ${renderIncomingRoutes(cityDoc)}
+      ${renderGovernor(cityDoc)}
       ${renderGreatWorks(cityDoc)}`;
   }
   function renderGreatWorks(cityDoc) {
@@ -394,13 +400,38 @@
       <div class="form-row"><select id="ovGwPick" style="width:100%">${opts.map((o) => `<option value="${esc(o.id)}">${esc(kind[o.type] || o.type || "")} · ${esc(nm(o.id))}</option>`).join("")}</select><button type="button" class="mini" id="ovGwAdd">+ 걸작 추가</button></div>
     </div>`;
   }
+  function renderIncomingRoutes(cityDoc) {
+    const routes = cityDoc.incoming_routes || [];
+    return `<div class="block"><h4><span>이 도시로 들어오는 교역로 (수입)</span></h4>
+      <p class="note">다른 문명·도시국가 상인이 이 도시를 목적지로 둔 교역로입니다(세이브 상인 기록). 도착 도시는 기본적으로 받는 산출이 없고, 세계 의회 무역 조약 같은 …_FROM_OTHERS 효과만 더합니다.</p>
+      ${routes.length ? `<ul class="plain">${routes.map((r, i) => `<li>${esc(r.origin_name || r.origin)} <span class="sub">${esc(r.origin_label || "")}${r.started_turn != null ? ` · ${esc(r.started_turn)}턴 시작` : ""}</span> <button class="mini" type="button" data-in-del="${i}">✕</button></li>`).join("")}</ul>` : '<p class="sub">들어오는 교역로 없음</p>'}
+    </div>`;
+  }
+  function renderGovernor(cityDoc) {
+    const options = (S.detail && S.detail.governor_options) || [];
+    if (!options.length) return "";
+    const gov = options.find((g) => g.id === cityDoc.governor);
+    const have = new Set(cityDoc.governor_promotions || []);
+    const GOV_KO = { GOVERNOR_THE_DEFENDER: "빅토르", GOVERNOR_THE_AMBASSADOR: "아마니", GOVERNOR_THE_CARDINAL: "목샤", GOVERNOR_THE_RESOURCE_MANAGER: "마그누스",
+      GOVERNOR_THE_BUILDER: "량", GOVERNOR_THE_EDUCATOR: "핑갈라", GOVERNOR_THE_MERCHANT: "레이나", GOVERNOR_IBRAHIM: "이브라힘" };
+    const nm = (id) => GOV_KO[id] || id.replace("GOVERNOR_PROMOTION_", "").replace(/^(EDUCATOR|BUILDER|RESOURCE_MANAGER|MERCHANT|CARDINAL|AMBASSADOR)_/, "").replaceAll("_", " ").toLowerCase();
+    const status = !gov ? "" : cityDoc.governor_established === false
+      ? `<span class="badge s-partial">정착 중${cityDoc.governor_turns != null ? ` (${cityDoc.governor_turns}/${S.detail.governor_establish_turns || 5}턴)` : ""} · 효과 미적용</span>`
+      : '<span class="badge s-verified">정착 완료 · 효과 적용</span>';
+    return `<div class="block"><h4><span>총독</span>${status}</h4>
+      <p class="note">세이브에서 총독 위치·진급·정착 턴을 읽습니다. 진급 효과(GovernorPromotionModifiers)는 정착을 마친 뒤에만 이 도시에 적용합니다.</p>
+      <div class="form-row"><select id="ovGov"><option value="">— 없음 —</option>${options.map((g) => `<option value="${esc(g.id)}" ${g.id === cityDoc.governor ? "selected" : ""}>${esc(nm(g.id))}</option>`).join("")}</select>
+        ${gov ? `<label><input type="checkbox" id="ovGovEst" ${cityDoc.governor_established === false ? "" : "checked"}/> 정착 완료</label>` : ""}</div>
+      ${gov ? `<ul class="plain gov-promos">${gov.promotions.map((p) => `<li><label><input type="checkbox" data-gov-promo="${esc(p.id)}" ${have.has(p.id) ? "checked" : ""}/> ${esc(nm(p.id))}${p.base ? " (기본)" : ""}</label> <span class="sub">${esc(p.support.status)}</span></li>`).join("")}</ul>` : ""}
+    </div>`;
+  }
   function renderTradeRoutes(cityDoc) {
     const routes = cityDoc.trade_routes || [];
     const dests = (S.detail && S.detail.trade_destinations) || [];
     const name = (key) => { const d = dests.find((x) => x.key === key); return d ? `${d.name} (${d.kind === "domestic" ? "국내" : "국제" + (d.owner ? " · " + d.owner : "")})` : key; };
     const options = dests.map((d) => `<option value="${esc(d.key)}">${esc(d.name)} — ${d.kind === "domestic" ? "국내" : "국제" + (d.owner ? " · " + esc(d.owner) : "")} (${esc(d.key)})</option>`).join("");
     return `<div class="block"><h4><span>이 도시에서 출발하는 교역로</span></h4>
-      <p class="note">세이브에서 교역로를 읽지 못하므로 직접 입력합니다. 목적지 특수지구(District_TradeRouteYields)와 교역로 정책·특성 고정 보너스를 출발 도시 산출에 더합니다. 목적지 도시가 받는 몫·자원별 보너스는 계산하지 않습니다.</p>
+      <p class="note">세이브의 상인 기록에서 가져오며, 직접 추가·삭제할 수도 있습니다. 목적지 특수지구(District_TradeRouteYields), 도시국가 교역 보너스, 교역로 정책·특성 고정 보너스를 출발 도시 산출에 더합니다. 자원별 보너스는 계산하지 않습니다.</p>
       ${routes.length ? `<ul class="plain">${routes.map((r, i) => `<li>${esc(name(r.destination))} <button class="mini" type="button" data-route-del="${i}">✕</button></li>`).join("")}</ul>` : '<p class="sub">입력된 교역로 없음</p>'}
       ${dests.length ? `<div class="form-row"><select id="ovRouteDest">${options}</select><button type="button" class="mini" id="ovRouteAdd">+ 교역로 추가</button></div>` : '<p class="sub">목적지로 쓸 다른 도시가 없습니다.</p>'}
     </div>`;
@@ -432,6 +463,16 @@
     const addRoute = root.querySelector("#ovRouteAdd");
     if (addRoute) addRoute.onclick = () => saveSettings({ trade_routes: [...routes, { destination: root.querySelector("#ovRouteDest").value }] });
     root.querySelectorAll("[data-route-del]").forEach((b) => (b.onclick = () => saveSettings({ trade_routes: routes.filter((_, i) => i !== Number(b.dataset.routeDel)) })));
+    const incoming = cityDoc.incoming_routes || [];
+    root.querySelectorAll("[data-in-del]").forEach((b) => (b.onclick = () => saveSettings({ incoming_routes: incoming.filter((_, i) => i !== Number(b.dataset.inDel)) })));
+    const govPick = root.querySelector("#ovGov");
+    if (govPick) govPick.onchange = () => saveSettings({ governor: govPick.value || null, governor_established: true });
+    const govEst = root.querySelector("#ovGovEst");
+    if (govEst) govEst.onchange = () => saveSettings({ governor_established: govEst.checked });
+    root.querySelectorAll("[data-gov-promo]").forEach((b) => (b.onchange = () => {
+      const chosen = [...root.querySelectorAll("[data-gov-promo]")].filter((i) => i.checked).map((i) => i.dataset.govPromo);
+      saveSettings({ governor_promotions: chosen });
+    }));
     root.querySelector("#ovAddEffect").onclick = () => {
       effects.push({ id: "custom-" + Date.now(), label: "사용자 효과", yields: {}, percent: {} });
       saveSettings({ custom_effects: effects });
@@ -490,7 +531,7 @@
         ${tiles.map((t) => {
           const p = prefs[t.key] || {};
           const per = t.district ? t.per_citizen : t.yields;
-          const what = t.district ? `${label(t.district)} (슬롯 ${t.specialist_slots})` : [label(t.terrain), t.feature && label(t.feature), t.resource && label(t.resource), t.improvement && label(t.improvement)].filter(Boolean).join(" · ");
+          const what = t.district ? `${label(t.district)} (슬롯 ${t.specialist_slots})` : [label(t.terrain), t.feature && label(t.feature), t.resource && label(t.resource), t.improvement && (label(t.improvement) + (t.improvement_pillaged ? " (약탈됨)" : ""))].filter(Boolean).join(" · ");
           const slots = t.district ? t.specialist_slots : 1;
           return `<tr data-key="${esc(t.key)}"><td>${esc(t.key)}</td><td>${esc(what)}</td><td>${yieldsInline(per)}</td>
             <td class="num"><div class="row-actions"><button class="mini" data-act="minus" ${t.citizens ? "" : "disabled"}>−</button><b>${t.citizens || 0}</b><button class="mini" data-act="plus" ${slots > (t.citizens || 0) ? "" : "disabled"}>＋</button></div></td>
@@ -684,7 +725,8 @@
         <div class="form-row"><label>판테온</label><select id="emPantheon"><option value="">— 없음 —</option>${e.beliefs.filter((b) => b.class === "BELIEF_CLASS_PANTHEON").map((b) => `<option value="${esc(b.id)}" ${b.id === cur.pantheon ? "selected" : ""}>${esc(label(b.id))} · ${esc(b.support.status)}</option>`).join("")}</select></div>
       </div>
       ${renderCityStates(e, cur)}
-      <div class="block"><h4><span>총독</span>${badge("미지원")}</h4><p class="note">${esc(e.governors.reason)}</p></div>
+      ${renderCongress(e, cur)}
+      ${e.governors && e.governors.available ? "" : `<div class="block"><h4><span>총독</span>${badge("미지원")}</h4><p class="note">${esc((e.governors || {}).reason || "")}</p></div>`}
       <div class="form-row"><button type="button" class="primary" id="emApply">정책·문명 설정 적용 (모든 도시 즉시 재계산)</button></div>
       ${S.empireResult ? renderEmpireImpact(S.empireResult) : ""}
       <p class="note">‘효과 해석 지원’은 해당 항목의 모든 Modifier 효과 유형을 엔진이 해석한다는 뜻이며, 게임과 대조 검증되었다는 뜻이 아닙니다. 해석하지 못한 효과는 ‘계산 근거·미지원 규칙’ 탭의 감사 로그에 남습니다.</p>`;
@@ -697,11 +739,21 @@
         pantheon: root.querySelector("#emPantheon").value || null, enforce_prerequisites: root.querySelector("#emEnforce").checked,
         apply_amenity_effects: root.querySelector("#emAmenity").checked,
         city_states: readCityStates(root),
+        world_congress: readCongress(root),
       };
     };
     // Keep unsaved choices when the form re-renders (government/civilization change).
     root.querySelector("#emGov").onchange = () => { Object.assign(S.empire.current, readForm(), { policy_slots: {} }); renderEmpire(); };
     root.querySelector("#emCiv").onchange = () => { Object.assign(S.empire.current, readForm(), { leader: null }); renderEmpire(); };
+    root.querySelectorAll("#emWcRows [data-wc-del]").forEach((b) => (b.onclick = () => { const tr = b.closest("tr"); tr.dataset.removed = "1"; tr.style.display = "none"; }));
+    const wcAdd = root.querySelector("#emWcAdd");
+    if (wcAdd) wcAdd.onclick = () => {
+      const id = root.querySelector("#emWcPick").value;
+      const kind = ((S.empire.resolutions || []).find((r) => r.id === id) || {}).target_kind;
+      Object.assign(S.empire.current, readForm());
+      S.empire.current.world_congress = [...(S.empire.current.world_congress || []), { resolution: id, effect: 1, targets_me: kind === "PLAYER", enabled: true, target_kind: kind }];
+      renderEmpire();
+    };
     root.querySelector("#emApply").onclick = () => guarded(async () => {
       const payload = readForm();
       S.empireResult = await api("/api/sim/empire", "PUT", payload);
@@ -725,6 +777,32 @@
       <p class="note">세이브에서 사절 수를 읽지 못합니다. 사절 1·3·6명 유형 보너스와 종주국 고유 보너스를 데이터(MINOR_CIV_*_TRAIT)대로 적용합니다. 평화 상태로 가정하며, 동맹·종교 조건이 붙은 보너스는 제외됩니다.</p>
       <table class="grid"><thead><tr><th>도시국가</th><th>유형</th><th>사절</th><th>종주국</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
+  function renderCongress(e, cur) {
+    const list = cur.world_congress || [];
+    const res = e.resolutions || [];
+    if (!res.length) return "";
+    const WC_KO = { DIPLOVICTORY: "외교 승리 점수", LUXURY: "사치품", TRADE_TREATY: "무역 조약", WORLD_RELIGION: "세계 종교", MERCENARY_COMPANIES: "용병",
+      ARMS_CONTROL: "군비 통제", HERITAGE_ORG: "문화유산 기구", WORLD_IDEOLOGY: "세계 이념", URBAN_DEVELOPMENT: "도시 개발", BORDER_CONTROL: "국경 통제",
+      PUBLIC_WORKS: "공공사업", PATRONAGE: "후원", GLOBAL_ENERGY_TREATY: "세계 에너지 조약", SOVEREIGNTY: "주권", MIGRATION_TREATY: "이민 조약",
+      DEFORESTATION_TREATY: "산림 벌채 조약", PUBLIC_RELATIONS: "홍보", ESPIONAGE_PACT: "첩보 협정", MILITARY_ADVISORY: "군사 자문" };
+    const nm = (id) => { const k = String(id).replace("WC_RES_", ""); return WC_KO[k] ? `${WC_KO[k]} (${k})` : k.replaceAll("_", " "); };
+    const rows = list.map((r, i) => `<tr data-wc="${i}"><td><input type="checkbox" data-wc-on ${r.enabled === false ? "" : "checked"}/></td><td>${esc(nm(r.resolution))}<div class="sub">${esc(r.target_kind || "")}${r.votes ? ` · 표 A ${esc(r.votes.A)} / B ${esc(r.votes.B)}` : ""}${r.source === "save" ? " · 세이브에서 읽음(추정)" : ""}</div></td>
+      <td><select data-wc-eff><option value="1" ${r.effect === 1 ? "selected" : ""}>A</option><option value="2" ${r.effect === 2 ? "selected" : ""}>B</option></select></td>
+      <td><input type="checkbox" data-wc-me ${r.targets_me ? "checked" : ""}/></td><td><button type="button" class="mini" data-wc-del>✕</button></td></tr>`).join("");
+    return `<div class="block"><h4><span>세계 의회 결의</span></h4>
+      <p class="note">대상이 플레이어인 결의 중 ‘내가 대상’인 것만 적용합니다(예: 무역 조약 A → 이 문명 도시로 들어오는 교역로마다 금 +4). 자원·위인 등 다른 대상 결의는 목록에만 남고 계산하지 않습니다.</p>
+      <table class="grid"><thead><tr><th>적용</th><th>결의</th><th>결과</th><th>내가 대상</th><th></th></tr></thead><tbody id="emWcRows">${rows || '<tr><td colspan="5" class="sub">결의 없음</td></tr>'}</tbody></table>
+      <div class="form-row"><select id="emWcPick">${res.map((r) => `<option value="${esc(r.id)}">${esc(nm(r.id))} (${esc(r.target_kind)})</option>`).join("")}</select><button type="button" class="mini" id="emWcAdd">+ 결의 추가</button></div></div>`;
+  }
+  function readCongress(root) {
+    const base = (S.empire && S.empire.current.world_congress) || [];
+    const result = [];
+    root.querySelectorAll("#emWcRows tr[data-wc]").forEach((tr) => {
+      const item = base[Number(tr.dataset.wc)]; if (!item || tr.dataset.removed) return;
+      result.push({ ...item, enabled: tr.querySelector("[data-wc-on]").checked, effect: Number(tr.querySelector("[data-wc-eff]").value), targets_me: tr.querySelector("[data-wc-me]").checked });
+    });
+    return result;
+  }
   function readCityStates(root) {
     const result = {};
     root.querySelectorAll("[data-cs]").forEach((i) => { const n = Math.max(0, Math.floor(Number(i.value) || 0)); if (n) result[i.dataset.cs] = { envoys: n, suzerain: false }; });
@@ -740,6 +818,24 @@
   }
 
   // --------------------------------------------------------------- tile
+  function renderTileAdjust(owner, key) {
+    const adj = ((owner.tile_adjustments || {})[key]) || { yields: {} };
+    return `<details class="tile-adjust"${Object.keys(adj.yields || {}).length ? " open" : ""}><summary>게임 값과 다를 때: 이 타일 수동 보정</summary>
+      <p class="note">범람·화산·폭풍으로 늘어난 산출은 세이브에서 읽어 이미 들어가 있습니다. 그래도 게임 툴팁과 다르면 차이만큼 입력하세요. 이 타일 산출에 더하고 장부에 ‘수동 보정’으로 따로 표시합니다.</p>
+      <div class="form-row">${YK.map((k) => `<label>${YL[k]} <input type="number" step="1" style="width:48px" data-adj="${k}" value="${Number((adj.yields || {})[k] || 0)}"/></label>`).join("")}</div>
+      <div class="form-row"><input id="tdAdjNote" placeholder="메모 (예: 약탈된 농장)" value="${esc(adj.note || "")}" style="width:60%"/><button class="mini" type="button" id="tdAdjSave">보정 저장</button><button class="mini" type="button" id="tdAdjClear">보정 삭제</button></div></details>`;
+  }
+  function bindTileAdjust(root, owner, key) {
+    const save = root.querySelector("#tdAdjSave"); if (!save) return;
+    const all = { ...(owner.tile_adjustments || {}) };
+    save.onclick = () => {
+      const yields = {};
+      root.querySelectorAll("[data-adj]").forEach((i) => { const v = Number(i.value) || 0; if (v) yields[i.dataset.adj] = v; });
+      if (Object.keys(yields).length) all[key] = { yields, note: root.querySelector("#tdAdjNote").value.trim() }; else delete all[key];
+      void saveSettings({ tile_adjustments: all });
+    };
+    root.querySelector("#tdAdjClear").onclick = () => { delete all[key]; void saveSettings({ tile_adjustments: all }); };
+  }
   function renderTileDetail() {
     const root = $("simTileDetail"); if (!root) return;
     const sel = state.selectedTile;
@@ -753,7 +849,9 @@
       ${info.district ? `<div class="kv"><span>특수지구</span><span>${esc(label(info.district))}</span><span>전문가 슬롯</span><span>${esc(info.specialist_slots)}</span><span>시민 1명 산출</span><span>${yieldsInline(info.per_citizen)}</span>${info.adjacency ? `<span>인접 보너스</span><span>${yieldsInline(info.adjacency)}</span>` : ""}</div>`
         : `${yieldsInline(info.yields, 2)}<ul class="reasons">${comps.map((c) => `<li>${esc(c.label)} ${YK.filter((k) => Math.abs(c.yields[k]) > 1e-9).map((k) => `${YL[k]} ${sgn(c.yields[k], 2)}`).join(", ")}${c.source ? ` <span class="sub">(${esc(c.source)})</span>` : ""}</li>`).join("")}</ul>`}
       ${info.pref ? `<div class="sub">우선순위: ${info.pref.lock ? "🔒 잠금 " : ""}${info.pref.block ? "⛔ 사용 금지 " : ""}${info.pref.priority ? "가중 " + info.pref.priority : ""}</div>` : ""}
+      ${owner && owner.id === state.selectedCityId && !info.district ? renderTileAdjust(owner, key) : ""}
       ${owner && owner.id === state.selectedCityId && !info.city_center ? `<div class="form-row"><button class="mini" id="tdPlus">시민 배치 +1</button><button class="mini" id="tdMinus">시민 해제 −1</button><button class="mini" id="tdLock">🔒 잠금 전환</button><button class="mini" id="tdBlock">⛔ 금지 전환</button></div>` : ""}</div>`;
+    if (owner) bindTileAdjust(root, owner, key);
     const plus = root.querySelector("#tdPlus");
     if (plus) {
       const p = info.pref || {};
@@ -830,8 +928,12 @@
     } else {
       const terr = [shortName(info.terrain), shortName(info.feature)].filter(Boolean).join("·");
       if (mid) lines.push({ text: terr, color: "#e8eef1" });
-      const imp = [shortName(info.improvement), info.resource ? shortName(info.resource) : ""].filter(Boolean).join(" ");
-      if (imp && full) lines.push({ text: imp, color: "#ffd88a" });
+      // Improvement (and resource) from the mid zoom level; when zoomed out
+      // further the improvement alone replaces the terrain line.
+      const impName = info.improvement ? shortName(info.improvement) + (info.improvement_pillaged ? "(약탈)" : "") : "";
+      const imp = [impName, info.resource && (mid || !info.improvement) ? shortName(info.resource) : ""]
+        .filter(Boolean).join(" ");
+      if (imp && (mid || info.improvement)) lines.push({ text: imp, color: info.improvement_pillaged ? "#ff8a7a" : "#ffd88a", bold: Boolean(info.improvement) });
       lines.push({ yields: YK.filter((k) => info.yields?.[k]).map((k) => ({ k, v: info.yields[k] })) });
     }
     const lh = fs * 1.15;
@@ -1211,6 +1313,67 @@
     } catch (error) { S.ledger = null; status("장부 오류: " + error.message); }
     renderLedger();
   }
+  // Every city, one yield: section totals per city, lines on demand.
+  async function loadYieldLedger() {
+    const key = S.yieldLedgerKey;
+    const root = $("simYieldLedger");
+    if (root && !S.yieldLedger) root.innerHTML = '<p class="muted">계산 중…</p>';
+    try {
+      const data = await api(`/api/sim/ledger/yield/${encodeURIComponent(key)}`);
+      if (key !== S.yieldLedgerKey) return;
+      S.yieldLedger = data; S.yieldLedgerStale = false;
+    } catch (error) { status("자원별 장부 오류: " + error.message); }
+    renderYieldLedger();
+  }
+  function renderYieldLedger() {
+    const root = $("simYieldLedger"); if (!root) return;
+    const L = S.yieldLedger;
+    const picker = `<span class="yl-pick">${["Science", "Culture", "Gold", "Faith", "Food", "Production"].map((k) =>
+      `<button type="button" class="mini${k === S.yieldLedgerKey ? " on" : ""}" data-yl="${k}">${YL[k]}</button>`).join("")}</span>`;
+    if (!L || L.yield !== S.yieldLedgerKey) {
+      root.innerHTML = `<div class="ledger-head"><b>자원별 장부</b> ${picker}</div><p class="muted">계산 중…</p>`;
+      bindYieldPicker(root); return;
+    }
+    const cols = L.columns;
+    const cell = (v) => `<td class="num${Math.abs(v || 0) < 1e-9 ? " zero" : ""}">${Math.abs(v || 0) < 1e-9 ? "·" : num(v, 1)}</td>`;
+    const ordered = [...L.cities].sort((a, b) => b.total - a.total);
+    let rows = "";
+    for (const c of ordered) {
+      const open = S.yieldLedgerOpen.has(c.city_id);
+      rows += `<tr class="yl-city" data-city="${esc(c.city_id)}"><td>${open ? "▾" : "▸"} <a href="#" data-pick="${esc(c.city_id)}">${esc(c.name)}</a> <span class="sub">인구 ${esc(c.population)}</span>${c.reconciled ? "" : ' <span class="badge s-unsupported">검산 불일치</span>'}</td>${cols.map((col) => cell(c.sections[col.id])).join("")}<td class="num"><b>${num(c.total, 1)}</b></td></tr>`;
+      if (open) {
+        let last = null;
+        for (const line of c.lines) {
+          if (line.section !== last) {
+            rows += `<tr class="lg-sub"><td colspan="${cols.length + 2}">&nbsp;&nbsp;${esc((cols.find((x) => x.id === line.section) || {}).label || line.section)}</td></tr>`;
+            last = line.section;
+          }
+          rows += `<tr class="yl-line"><td colspan="${cols.length + 1}">&nbsp;&nbsp;&nbsp;&nbsp;${esc(line.label)}${line.location ? ` <span class="sub">(${esc(line.location)})</span>` : ""}<div class="sub formula">${esc(line.formula)}</div></td><td class="num">${sgn(line.value, 2)}</td></tr>`;
+        }
+      }
+    }
+    rows += `<tr class="lg-total"><td>전체 도시 합계</td>${cols.map((col) => cell(L.section_totals[col.id])).join("")}<td class="num"><b>${num(L.total, 1)}</b></td></tr>`;
+    root.innerHTML = `<div class="ledger-head"><b>${esc(L.yield_label)} 장부 · 모든 도시 · 턴 ${esc(L.turn)}</b> ${picker}
+        <button type="button" class="mini" id="ylAll">모두 펼치기</button><button type="button" class="mini" id="ylNone">모두 접기</button>
+        <span class="sub">도시 줄을 누르면 그 도시의 ${esc(L.yield_label)} 항목이 펼쳐집니다. 도시 이름을 누르면 그 도시를 선택합니다. 제국 전체 수입·유지비는 포함하지 않은 도시 산출 합계입니다.</span></div>
+      <table class="grid ledger"><thead><tr><th>도시</th>${cols.map((col) => `<th class="num" title="${esc(col.label)}">${esc(col.label.split(" (")[0])}</th>`).join("")}<th class="num">합계</th></tr></thead><tbody>${rows}</tbody></table>`;
+    bindYieldPicker(root);
+    root.querySelector("#ylAll").onclick = () => { S.yieldLedgerOpen = new Set(L.cities.map((c) => c.city_id)); renderYieldLedger(); };
+    root.querySelector("#ylNone").onclick = () => { S.yieldLedgerOpen = new Set(); renderYieldLedger(); };
+    root.querySelectorAll("tr.yl-city").forEach((tr) => (tr.onclick = (event) => {
+      const pick = event.target.closest("[data-pick]");
+      if (pick) { event.preventDefault(); if (typeof window.selectCity === "function") window.selectCity(pick.dataset.pick); return; }
+      const id = tr.dataset.city;
+      if (S.yieldLedgerOpen.has(id)) S.yieldLedgerOpen.delete(id); else S.yieldLedgerOpen.add(id);
+      renderYieldLedger();
+    }));
+  }
+  function bindYieldPicker(root) {
+    root.querySelectorAll("[data-yl]").forEach((b) => (b.onclick = () => {
+      if (S.yieldLedgerKey === b.dataset.yl) return;
+      S.yieldLedgerKey = b.dataset.yl; S.yieldLedger = null; renderYieldLedger(); void loadYieldLedger();
+    }));
+  }
   function renderTradeLedger(L) {
     const routes = L.trade_routes || [];
     if (!routes.length) return `<div class="block" style="margin-top:10px"><h4><span>교역로 장부</span></h4><p class="sub">이 도시에서 출발하는 교역로가 없습니다 (개요 탭에서 추가).</p></div>`;
@@ -1580,8 +1743,73 @@
   // Apply the saved panel sizes immediately so the page does not jump after loading.
   try { loadLayout(); applyLayout(); } catch (error) { /* layout is optional */ }
 
+  // ------------------------------------------------------------ difficulty
+  async function openDifficulty() {
+    const dlg = document.getElementById("difficultyDialog"); if (!dlg) return;
+    let data;
+    try { data = await api("/api/sim/difficulties"); } catch (error) { status("난이도 정보를 불러오지 못했습니다: " + error.message); return; }
+    const opts = (sel) => data.levels.map((l) => `<option value="${esc(l.id)}" ${l.id === sel ? "selected" : ""}>${esc(l.label)}</option>`).join("");
+    $("difficultyRows").innerHTML = data.players.map((p) => `<tr data-key="${esc(p.key)}"${p.key === data.current ? ' class="current"' : ""}>
+      <td>${esc(p.label)}${p.key === data.current ? ' <span class="badge s-verified">지금 보는 문명</span>' : ""}</td>
+      <td class="num">${p.cities == null ? "" : esc(p.cities)}</td>
+      <td><select data-diff>${opts(p.difficulty)}</select></td>
+      <td><select data-human><option value="ai" ${p.human ? "" : "selected"}>AI</option><option value="human" ${p.human ? "selected" : ""}>사람</option></select></td></tr>`).join("");
+    $("difficultyAll").innerHTML = opts(data.default);
+    $("difficultyAllApply").onclick = () => {
+      document.querySelectorAll("#difficultyRows tr").forEach((tr) => {
+        if (tr.querySelector("[data-human]").value === "ai") tr.querySelector("[data-diff]").value = $("difficultyAll").value;
+      });
+    };
+    const cell = (r, i) => {
+      const v = r.values[i], d = (r.data_values || r.values)[i];
+      const changed = Math.abs(v - d) > 1e-9;
+      return `<td class="num${changed ? " overridden" : ""}" title="게임 데이터: ${esc(num(d, 1))}"><input type="number" step="any" class="bonus-input" data-mod="${esc(r.modifier)}" data-level="${esc(data.levels[i].id)}" data-orig="${esc(d)}" value="${esc(v)}"></td>`;
+    };
+    $("difficultyTable").innerHTML = `<table class="grid bonus-table"><thead><tr><th>대상</th><th>효과</th>${data.levels.map((l) => `<th class="num">${esc(l.label)}</th>`).join("")}</tr></thead><tbody>${
+      data.table.map((r) => `<tr${r.applies_to_yields ? ' class="yields"' : ""}><td>${esc(r.who)}</td><td>${esc(r.label)}${r.applies_to_yields ? " <b>· 산출 반영</b>" : ""}</td>${
+        r.values.map((_, i) => cell(r, i)).join("")}</tr>`).join("")}</tbody></table>
+      <div class="form-row"><button type="button" class="mini" id="difficultyResetBonus">보너스 표를 게임 데이터 값으로 되돌리기</button></div>
+      <p class="sub">AI 추가 % (게임 데이터에 없음, 관전 세이브 비교로 맞춘 값): ${esc(Object.entries(data.ai_extra_percent || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}%`).join(", ") || "없음")} — ${esc(data.config_file || "app/config/difficulty.json")}의 ai_extra_percent에서 바꿉니다. % 보정은 게임처럼 1/256 단위로 반올림해 더합니다(24% → 23.83%).</p>
+      <p class="sub">칸을 고치고 적용하면 ${esc(data.config_file || "app/config/difficulty.json")}에 저장되어 다음 실행에도 유지됩니다. 노란 칸은 게임 데이터와 다른 값입니다(마우스를 올리면 원래 값). 산출 반영 표시가 있는 줄만 도시 계산에 들어갑니다. 전투력·경험치·무료 유레카/영감·시작 유닛은 도시 산출과 무관해 참고로만 보여 줍니다.</p>`;
+    const mark = (input) => input.closest("td").classList.toggle("overridden", Math.abs(Number(input.value) - Number(input.dataset.orig)) > 1e-9);
+    document.querySelectorAll("#difficultyTable .bonus-input").forEach((input) => { input.oninput = () => mark(input); });
+    $("difficultyResetBonus").onclick = () => document.querySelectorAll("#difficultyTable .bonus-input").forEach((input) => { input.value = input.dataset.orig; mark(input); });
+    dlg.returnValue = "";
+    dlg.showModal();
+    const answer = await new Promise((resolve) => dlg.addEventListener("close", () => resolve(dlg.returnValue), { once: true }));
+    if (answer !== "save") return;
+    const players = {};
+    document.querySelectorAll("#difficultyRows tr").forEach((tr) => {
+      players[tr.dataset.key] = { difficulty: tr.querySelector("[data-diff]").value, human: tr.querySelector("[data-human]").value === "human" };
+    });
+    await guarded(async () => {
+      const bonus_overrides = {};
+      document.querySelectorAll("#difficultyTable .bonus-input").forEach((input) => {
+        const value = Number(input.value);
+        if (input.value !== "" && Number.isFinite(value) && Math.abs(value - Number(input.dataset.orig)) > 1e-9) {
+          (bonus_overrides[input.dataset.mod] ||= {})[input.dataset.level] = value;
+        }
+      });
+      const result = await api("/api/sim/difficulties", "PUT", { players, bonus_overrides });
+      S.difficulties = { default: result.default, players: Object.fromEntries(result.players.map((p) => [p.key, { difficulty: p.difficulty, human: p.human }])) };
+      if (typeof state !== "undefined" && state.game) state.game.difficulties = S.difficulties;
+      const changed = (result.impact || []).filter((i) => Object.values(i.delta).some((v) => Math.abs(v) > 1e-9));
+      status(changed.length ? `난이도 적용: ${changed.length}개 도시 산출이 바뀌었습니다.` : "난이도 적용: 지금 보는 문명의 산출은 그대로입니다.");
+      S.yieldLedgerStale = true;
+      await refreshAll();
+    });
+  }
+  const diffBtn = document.getElementById("difficultyBtn");
+  if (diffBtn) diffBtn.onclick = () => void openDifficulty();
+
+  function invalidate() {
+    S.prod = null; S.empire = null; S.optimize = null; S.difficulties = null;
+    S.yieldLedger = null; S.yieldLedgerStale = true; S.ledger = null;
+    if (document.querySelector('[data-tabs="right"] .tab.active')?.dataset.tab === "empire") void loadEmpire();
+  }
+
   window.SimUI = {
-    init, runTurns, overlayActive, decorateTile, markTile, afterDraw, onTileClick, detailsAt,
+    invalidate, init, runTurns, overlayActive, decorateTile, markTile, afterDraw, onTileClick, detailsAt,
     refreshAll, refreshCity, _state: S,
   };
 })();

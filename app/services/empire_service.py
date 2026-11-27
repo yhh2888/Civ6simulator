@@ -4,10 +4,13 @@ Stored in ``game_state["empire"]`` (preserved by saves and named snapshots).
 Validation uses Governments / Government_SlotCounts / GovernmentSlots /
 Policies / ObsoletePolicies / CivilizationLeaders / Beliefs from rules_db.
 
-Governors: the supplied Data.zip is base-game data and contains no Governors
-tables (introduced by the Rise and Fall expansion), so governor effects cannot
-be derived from data. City governor fields remain editable for notes, and
-user-defined custom effects can model them explicitly.
+Governors: with expansion rules (rules_db_xp2.json) promotions are applied
+through GovernorPromotionModifiers once the governor is established in its
+city; the base-game data has no Governors tables.
+
+World Congress: ``empire["world_congress"]`` lists resolution results; those
+whose effect attaches a modifier to a target player apply when the player is
+the target (targets_me).
 """
 
 from __future__ import annotations
@@ -23,9 +26,9 @@ from app.services.sim_context import as_bool, as_float
 GOVERNOR_STATUS = {
     "available": False,
     "reason": (
-        "Data.zip(기본 게임 데이터)에는 Governors / GovernorPromotions 테이블이 없습니다. "
-        "총독은 '흥망성쇠(Rise and Fall)' 확장팩 규칙이므로 데이터 기반 효과를 계산할 수 없습니다. "
-        "도시의 총독 필드는 메모로 유지되며, 효과가 필요하면 도시의 '사용자 정의 효과'로 직접 입력하세요."
+        "지금 적용된 규칙(기본 게임)에는 Governors / GovernorPromotions 표가 없습니다. "
+        "총독은 확장팩 규칙이라, 확장팩 세이브를 불러오면 확장팩 규칙 DB(rules_db_xp2.json)로 계산합니다. "
+        "세이브를 불러왔는데도 이 문구가 보이면 첫 실행 화면의 데이터 추출에서 DLC 폴더가 함께 잡혔는지 확인하세요."
     ),
 }
 
@@ -59,6 +62,26 @@ def sanitize_empire(empire: dict) -> dict:
     }
     result["enforce_prerequisites"] = empire.get("enforce_prerequisites", True) is not False
     result["city_states"] = _clean_city_states(empire.get("city_states"))
+    result["world_congress"] = _clean_congress(empire.get("world_congress"))
+    return result
+
+
+def _clean_congress(value: Any) -> list[dict]:
+    result = []
+    if not isinstance(value, list):
+        return result
+    for item in value[:20]:
+        if not isinstance(item, dict) or not str(item.get("resolution") or "").startswith("WC_RES_"):
+            continue
+        effect = item.get("effect")
+        if effect not in (1, 2):
+            continue
+        entry = {"resolution": item["resolution"], "effect": effect, "targets_me": item.get("targets_me") is True,
+                 "enabled": item.get("enabled", True) is not False}
+        for key in ("target_kind", "target_player", "votes", "source"):
+            if key in item:
+                entry[key] = item[key]
+        result.append(entry)
     return result
 
 
@@ -199,7 +222,40 @@ def empire_options(db: RulesDB, game: dict) -> dict[str, Any]:
         "civilizations": sorted(civilizations, key=lambda c: c["id"]),
         "leaders": sorted(leaders, key=lambda l: l["id"]),
         "beliefs": beliefs,
-        "governors": GOVERNOR_STATUS,
+        "governors": _governor_options(db),
+        "resolutions": [
+            {"id": r.get("ResolutionType"), "target_kind": r.get("TargetKind"),
+             "effects": {
+                 str(which): [e.get("ModifierId") for e in db.rows("ResolutionEffects")
+                                             if e.get("ResolutionType") == r.get("ResolutionType")
+                                             and str(e.get("WhichEffect")) == str(which)]
+                 for which in (1, 2)}}
+            for r in db.rows("Resolutions")],
+    }
+
+
+def _governor_options(db: RulesDB) -> dict:
+    governors = db.rows("Governors")
+    if not governors:
+        return GOVERNOR_STATUS
+    sets = db.group("GovernorPromotionSets", "GovernorType")
+    promotions = db.index("GovernorPromotions", "GovernorPromotionType")
+    prereqs = db.group("GovernorPromotionPrereqs", "GovernorPromotionType")
+    links = db.group("GovernorPromotionModifiers", "GovernorPromotionType")
+    return {
+        "available": True,
+        "establish_turns": int(db.param("GOVERNOR_BASE_TURNS_TO_ESTABLISH", 5) or 5),
+        "list": [
+            {"id": g.get("GovernorType"), "name": g.get("Name"),
+             "promotions": [
+                 {"id": row.get("GovernorPromotion"),
+                  "level": (promotions.get(row.get("GovernorPromotion")) or {}).get("Level"),
+                  "column": (promotions.get(row.get("GovernorPromotion")) or {}).get("Column"),
+                  "base": as_bool((promotions.get(row.get("GovernorPromotion")) or {}).get("BaseAbility")),
+                  "prereqs": [p.get("PrereqGovernorPromotion") for p in prereqs.get(row.get("GovernorPromotion"), [])],
+                  "support": modifier_support(db, [l.get("ModifierId") for l in links.get(row.get("GovernorPromotion"), [])])}
+                 for row in sets.get(g.get("GovernorType"), [])]}
+            for g in governors],
     }
 
 
@@ -231,6 +287,11 @@ def validate_empire_update(db: RulesDB, game: dict, payload: dict) -> tuple[dict
             if unknown:
                 raise ApplicationError(422, f"도시국가가 아닙니다: {', '.join(map(str, unknown[:3]))}")
             empire["city_states"] = _clean_city_states(value)
+        elif key == "world_congress" and value is not None:
+            known = db.index("Resolutions", "ResolutionType")
+            if not isinstance(value, list) or any(not isinstance(i, dict) or i.get("resolution") not in known for i in value):
+                raise ApplicationError(422, "world_congress는 Resolutions 표의 결의 목록이어야 합니다.")
+            empire["world_congress"] = _clean_congress(value)
     enforce = empire.get("enforce_prerequisites", True)
     civics = set(game.get("civics") or [])
     governments = db.index("Governments", "GovernmentType")

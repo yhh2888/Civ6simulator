@@ -227,6 +227,55 @@ def route_results(ctx: EngineContext, book, city_id: str) -> tuple[list[dict], l
     return results, warnings
 
 
+def incoming_results(ctx: EngineContext, book, city_id: str) -> list[dict]:
+    """Destination-city yields of routes other players run into the city:
+    only EFFECT_ADJUST_TRADE_ROUTE_YIELD_FROM_OTHERS modifiers on the city
+    (District_TradeRouteYields gives the destination nothing)."""
+    view = ctx.city_views[city_id]
+    routes = [r for r in view.city.get("incoming_routes") or [] if isinstance(r, dict)][:MAX_ROUTES_PER_CITY]
+    if not routes:
+        return []
+    records = [r for r in book.for_effect("EFFECT_ADJUST_TRADE_ROUTE_YIELD_FROM_OTHERS")
+               if r.subject.city_id in (None, city_id)]
+    results = []
+    for route in routes:
+        details, total = [], zero_yields()
+        for record in records:
+            # Domestic-only modifiers do not apply: these routes come from other players.
+            if str(record.data.get("Domestic", "")).lower() == "true":
+                continue
+            values = _record_yields(record)
+            if any(values.values()):
+                for key, amount in values.items():
+                    total[key] += amount
+                details.append({"record": record, "label": f"{record.source_kind} {record.source_id}", "yields": values})
+        results.append({"origin": route.get("origin"), "origin_name": route.get("origin_name") or route.get("origin"),
+                        "origin_label": route.get("origin_label"), "started_turn": route.get("started_turn"),
+                        "details": details, "yields": total})
+    return results
+
+
+def sanitize_incoming(value: Any) -> list[dict]:
+    from app.core.exceptions import ApplicationError
+
+    if not isinstance(value, list) or len(value) > MAX_ROUTES_PER_CITY:
+        raise ApplicationError(422, f"incoming_routes는 최대 {MAX_ROUTES_PER_CITY}개 목록입니다.")
+    cleaned = []
+    for item in value:
+        if not isinstance(item, dict) or parse_key(item.get("origin")) is None:
+            raise ApplicationError(422, "수입 교역로 항목은 {\"origin\": \"x,y\"} 형식이어야 합니다.")
+        x, y = parse_key(item["origin"])
+        entry = {"origin": f"{x},{y}", "origin_name": str(item.get("origin_name") or f"{x},{y}")[:60]}
+        if item.get("origin_label"):
+            entry["origin_label"] = str(item["origin_label"])[:60]
+        if isinstance(item.get("origin_player"), int):
+            entry["origin_player"] = item["origin_player"]
+        if isinstance(item.get("started_turn"), (int, float)) and 0 <= item["started_turn"] < 10000:
+            entry["started_turn"] = int(item["started_turn"])
+        cleaned.append(entry)
+    return cleaned
+
+
 def sanitize_routes(value: Any, ctx: EngineContext | None = None, city_id: str | None = None) -> list[dict]:
     from app.core.exceptions import ApplicationError
 

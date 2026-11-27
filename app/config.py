@@ -148,7 +148,7 @@ _OPTIONAL_RULES = {
 _SIMULATION_BOOLEANS = {
     "apply_modifiers", "apply_amenity_effects", "apply_housing_growth_penalty",
     "apply_game_speed_costs", "apply_cost_progression", "resource_visibility_requires_tech",
-    "starvation_pop_loss",
+    "starvation_pop_loss", "fixed_point_percent",
 }
 _SIMULATION_CHOICES = {
     "population_yields_source": ("config", "global_parameters"),
@@ -469,7 +469,7 @@ def load_game_rules(path: Path) -> dict:
         rules = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
         raise RuleConfigurationError(
-            f"Gameplay rules file is missing: {path}. Restore app/data/game_rules.json."
+            f"Gameplay rules file is missing: {path}. Restore app/config/game_rules.json."
         ) from error
     except (OSError, json.JSONDecodeError) as error:
         raise RuleConfigurationError(

@@ -264,6 +264,15 @@ def validate_game_state_snapshot(state: Any, cities: dict, map_data: dict) -> di
 
     if isinstance(state.get("empire"), dict):
         validated["empire"] = sanitize_empire(state["empire"])
+    if isinstance(state.get("difficulties"), dict):
+        from app.services.difficulty_service import settings
+
+        kept = settings(state)
+        validated["difficulties"] = {
+            "default": kept["default"],
+            "players": {k: {"difficulty": v.get("difficulty"), "human": v.get("human") is True}
+                        for k, v in list(kept["players"].items())[:64] if isinstance(v.get("difficulty"), str)},
+        }
     if isinstance(state.get("sim_history"), list):
         validated["sim_history"] = [item for item in state["sim_history"] if isinstance(item, dict)][-60:]
     from app.repositories.locations import RULESET_FILES

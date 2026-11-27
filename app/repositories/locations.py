@@ -18,7 +18,14 @@ def catalog_file() -> Path:
 
 
 def rules_file() -> Path:
-    return paths.DATA / "game_rules.json"
+    """app/config/game_rules.json; a copy in the data folder (an isolated
+    runtime or an older install) takes precedence."""
+    legacy = paths.DATA / "game_rules.json"
+    return legacy if legacy.exists() else paths.CONFIG / "game_rules.json"
+
+
+def config_file(name: str) -> Path:
+    return paths.CONFIG / name
 
 
 def game_state_file() -> Path:

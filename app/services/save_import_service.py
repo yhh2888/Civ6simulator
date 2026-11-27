@@ -194,12 +194,16 @@ DECODED_FIELDS = [
     "연구한 기술·사회제도, 유레카·영감, 연구 진행도",
     "정부(슬롯 구성과 대조해 확정)·장착 정책",
     "상인의 교역로(출발·도착 도시, 시작 턴), 판테온(종교관), 도시국가에 보낸 사절 수, 종주국(사절 3명 이상이며 다른 문명보다 많을 때로 판정)",
+    "자연재해로 늘어난 타일 산출(범람·화산·폭풍 비옥도, 한 턴 차이 세이브로 확인)",
+    "시설·건물 약탈 상태(약탈된 시설·건물은 수리 전까지 산출 없음)",
+    "도시 건물에 걸린 걸작(걸작 목록 순번으로 연결)",
+    "총독 위치·진급·정착 턴, 세계 의회 결의(추정), 게임 난이도",
 ]
 NOT_DECODED_FIELDS = [
     "대기열 2번째 이후 항목 (받은 세이브가 모두 1개라 형식 미확인)",
     "비축 식량",
     "지금 연구 중인 기술·사회제도 (진행도만 있음)",
-    "총독, 종교 창시 신앙, 쾌적도·충성도, 유닛 (교역로 목적지가 지도에 없는 도시면 제외)",
+    "종교 창시 신앙, 쾌적도·충성도, 유닛 (교역로 목적지가 지도에 없는 도시면 제외)",
 ]
 
 
@@ -294,7 +298,108 @@ def _player_state_documents(save: SaveData, player: int, db) -> dict:
     return result
 
 
-def build_documents(save: SaveData, player: int, filename: str, *, now: str | None = None) -> tuple[dict, dict, dict, dict]:
+def _governor_fields(save: SaveData, player: int, city, db) -> dict:
+    """Governor stationed in the city, its promotions and whether it is
+    established (turns in the city ≥ GOVERNOR_BASE_TURNS_TO_ESTABLISH)."""
+    needed = int(db.param("GOVERNOR_BASE_TURNS_TO_ESTABLISH", 5) or 5) if db.available else 5
+    for governor in save.governors:
+        if governor.get("owner") not in (None, player) or governor.get("city_index") != city.city_index:
+            continue
+        if not _in_rules(db, "Governors", "GovernorType", governor["type"]):
+            continue
+        turns = governor.get("turns")
+        promotions = [p for p in governor.get("promotions") or []
+                      if _in_rules(db, "GovernorPromotions", "GovernorPromotionType", p)]
+        return {"governor": governor["type"], "governor_promotions": promotions,
+                "governor_turns": turns,
+                "governor_established": bool(isinstance(turns, int) and turns >= needed)}
+    return {"governor": None, "governor_promotions": []}
+
+
+def _incoming_routes(save: SaveData, player: int, city) -> list[dict]:
+    """Routes other players' (and city-states') traders run into this city."""
+    labels = {(c_.x, c_.y): c_.name for c_ in save.cities}
+    routes = []
+    for route in save.trade_routes:
+        if route["destination"] != (city.x, city.y) or route["destination_player"] != player:
+            continue
+        owner = route.get("owner")
+        if owner == player or route["origin_player"] == player:
+            continue  # own traders: counted on the origin city
+        ox, oy = route["origin"]
+        routes.append({"origin": f"{ox},{oy}", "origin_name": labels.get((ox, oy)),
+                       "origin_player": route["origin_player"],
+                       "origin_label": _player_label(save.players.get(route["origin_player"], {})),
+                       "started_turn": route["started_turn"]})
+    return routes[:20]
+
+
+YIELD_KEY = {"YIELD_FOOD": "Food", "YIELD_PRODUCTION": "Production", "YIELD_GOLD": "Gold",
+             "YIELD_SCIENCE": "Science", "YIELD_CULTURE": "Culture", "YIELD_FAITH": "Faith"}
+
+
+def _event_yields(values: dict | None) -> dict:
+    return {YIELD_KEY[k]: v for k, v in (values or {}).items() if k in YIELD_KEY and v}
+
+
+def _leader_for(db, info: dict) -> str | None:
+    """The slot's leader; when the save does not name it (the human slot in
+    the saves seen so far), the civilization's only leader if it has one."""
+    leader = info.get("leader")
+    if _in_rules(db, "Leaders", "LeaderType", leader):
+        return leader
+    options = [r.get("LeaderType") for r in db.rows("CivilizationLeaders")
+               if r.get("CivilizationType") == info.get("civilization") and r.get("LeaderType")]
+    return options[0] if len(set(options)) == 1 else None
+
+
+def _difficulty_documents(save: SaveData, db, previous: dict | None = None) -> dict:
+    """Every major civilization starts at the game's difficulty; the save's
+    owner (the default player) is human, the others AI. Settings the user
+    made earlier for this save (``previous``) are kept."""
+    from app.services import app_config_service as cfg
+    from app.services.difficulty_service import clean, default_level, levels
+
+    order = levels(db)
+    header = save.header if isinstance(save.header, dict) else getattr(save.header, "__dict__", {})
+    level = header.get("difficulty") if header.get("difficulty") in order else default_level(db)
+    # In a spectator game the owner is the spectator slot: every civilization is AI.
+    spectator = any(p.get("spectator") for p in save.players.values())
+    human = None if spectator and cfg.get("save_import.json", "spectator_all_ai", True) else default_player(save)
+    players = {
+        str(index): {"difficulty": level, "human": index == human}
+        for index, p in sorted(save.players.items())
+        if not p.get("minor") and not p.get("spectator") and index < FREE_CITIES_PLAYER
+    }
+    result = {"default": level, "players": players}
+    if isinstance(previous, dict):
+        try:
+            merged = clean(db, {"players": {k: v for k, v in (previous.get("players") or {}).items() if k in players}},
+                           result)
+            result = merged
+        except ApplicationError:
+            pass
+    return result
+
+
+def _congress_documents(save: SaveData, player: int, db) -> list[dict]:
+    """Last World Congress results; PLAYER-target resolutions record whether
+    they target this player (only those can be applied)."""
+    result = []
+    for item in save.congress:
+        if not _in_rules(db, "Resolutions", "ResolutionType", item["resolution"]) or item.get("effect") not in (1, 2):
+            continue
+        entry = {"resolution": item["resolution"], "effect": item["effect"], "target_kind": item["target_kind"],
+                 "votes": {"A": item["votes"].count(1), "B": item["votes"].count(2)}, "source": "save"}
+        if item["target_kind"] == "PLAYER":
+            entry["target_player"] = item["target"]
+            entry["targets_me"] = item["target"] == player
+        result.append(entry)
+    return result
+
+
+def build_documents(save: SaveData, player: int, filename: str, *, now: str | None = None,
+                    difficulties: dict | None = None) -> tuple[dict, dict, dict, dict]:
     """Convert a decoded save to (map, cities, game_state, report)."""
     ruleset = ruleset_for(save)
     db = load_rules_db(ruleset)
@@ -356,6 +461,8 @@ def build_documents(save: SaveData, player: int, filename: str, *, now: str | No
             "road": None if t.road == 255 else t.road,
             "appeal": t.appeal,
             "save_owner": t.player,
+            **({"improvement_pillaged": True} if t.pillaged and t.improvement else {}),
+            **({"event_yields": _event_yields(save.plot_yields.get((t.x, t.y)))} if (t.x, t.y) in save.plot_yields else {}),
         })
 
     population_decoded = 0
@@ -365,6 +472,7 @@ def build_documents(save: SaveData, player: int, filename: str, *, now: str | No
     for c in own_cities:
         city_id = ids[(c.player, c.city_index)]
         built = [b["type"] for b in c.buildings]
+        pillaged_buildings = [b["type"] for b in c.buildings if b.get("pillaged")]
         city_wonders = [b for b in built if b in wonders or b in tile_wonders]
         city_buildings = [b for b in built if b not in city_wonders]
         districts = []
@@ -398,8 +506,7 @@ def build_documents(save: SaveData, player: int, filename: str, *, now: str | No
             "buildings": city_buildings,
             "districts": districts,
             "wonders": city_wonders,
-            "governor": None,
-            "governor_promotions": [],
+            **_governor_fields(save, player, c, db),
             "policies": [],
             "technologies": [],
             "civics": [],
@@ -418,6 +525,10 @@ def build_documents(save: SaveData, player: int, filename: str, *, now: str | No
                 for r in save.trade_routes
                 if r["origin"] == (c.x, c.y) and r["origin_player"] == player and r.get("owner") in (None, player)
             ][:20],
+            "incoming_routes": _incoming_routes(save, player, c),
+            "pillaged_buildings": pillaged_buildings,
+            "great_works": [w for w in save.great_works.get((c.player, c.city_index), [])
+                            if _in_rules(db, "GreatWorks", "GreatWorkType", w)][:40],
             "created_from_map": False,
             "stored_food": 0.0,
             "food_yield": 0.0,
@@ -505,7 +616,7 @@ def build_documents(save: SaveData, player: int, filename: str, *, now: str | No
         "research": {},
         "empire": {
             "civilization": info.get("civilization") if _in_rules(db, "Civilizations", "CivilizationType", info.get("civilization")) else None,
-            "leader": info.get("leader") if _in_rules(db, "Leaders", "LeaderType", info.get("leader")) else None,
+            "leader": _leader_for(db, info),
             "government": None,
             "pantheon": None,
             "policy_slots": {},
@@ -526,14 +637,22 @@ def build_documents(save: SaveData, player: int, filename: str, *, now: str | No
         game["empire"]["city_states"] = player_state["city_states"]
         game["empire"]["pantheon"] = player_state.get("pantheon")
         game["empire"]["enforce_prerequisites"] = True
+    game["difficulties"] = _difficulty_documents(save, db, difficulties)
+    congress = _congress_documents(save, player, db)
+    if congress:
+        game["empire"]["world_congress"] = congress
     warnings.extend(player_state["warnings"])
     if ruleset:
         game["ruleset"] = ruleset
     # Amenity sources outside the map (traded luxuries, garrisons, religion,
     # great people, war weariness) are not decoded, so the computed amenity
     # state would be a guess; its yield/growth effect starts switched off.
-    game["simulation_overrides"] = {"apply_amenity_effects": False}
-    warnings.append("쾌적도 효과(성장·산출 %)는 꺼 둔 상태로 가져옵니다. 교역 사치품·주둔 유닛·종교 등 "
+    from app.services import app_config_service as cfg
+
+    amenity_on = cfg.get("save_import.json", "apply_amenity_effects", False) is True
+    game["simulation_overrides"] = {"apply_amenity_effects": amenity_on}
+    if not amenity_on:
+        warnings.append("쾌적도 효과(성장·산출 %)는 꺼 둔 상태로 가져옵니다. 교역 사치품·주둔 유닛·종교 등 "
                     "쾌적도 출처를 세이브에서 읽지 못해 계산값이 실제와 다를 수 있습니다.")
     report = {
         "file": filename,
@@ -645,7 +764,9 @@ def apply_save_import(payload: dict) -> dict:
         player = default_player(save)
     if not isinstance(player, int) or isinstance(player, bool) or player not in save.players:
         raise ApplicationError(422, "가져올 플레이어를 선택하세요.")
-    map_data, cities, game, report = build_documents(save, player, filename)
+    previous = payload.get("difficulties")
+    map_data, cities, game, report = build_documents(save, player, filename,
+                                                     difficulties=previous if isinstance(previous, dict) else None)
     snapshot = {"map": map_data, "cities": cities, "game_state": game}
     map_data, cities = validate_map_snapshot(snapshot)
     state = validate_game_state_snapshot(game, cities, map_data)
@@ -674,3 +795,74 @@ def apply_save_import(payload: dict) -> dict:
         "game_state": game_state(),
         "import_report": report,
     }
+
+
+# ------------------------------------------------------------- export
+EXPORT_COLUMNS = ["save", "turn", "player", "civilization", "leader", "difficulty", "ai", "city", "x", "y",
+                  "population", "citizens_from_save", "food", "production", "gold", "science", "culture", "faith",
+                  "science_raw", "culture_raw", "gold_raw", "production_raw", "food_raw", "faith_raw",
+                  "percent_science", "percent_culture", "percent_gold", "percent_production",
+                  "amenity_score", "amenity_state"]
+
+
+def _trunc(value: float) -> float:
+    """The game shows yields cut to one decimal (15.59 → 15.5)."""
+    import math
+
+    return math.floor(value * 10 + 1e-6) / 10
+
+
+def export_city_yields(raw: bytes, filename: str | None = None, difficulties: dict | None = None) -> list[dict]:
+    """Studio yields of every city of every major civilization in one save
+    (city-states, free cities and the spectator are skipped). Each player is
+    computed the way an import as that player would be; citizens come from
+    the save (cities whose assignment could not be read are marked)."""
+    from app.services.simulation_service import context_for, statics
+    from app.services.turn_simulation_service import evaluate
+
+    preview = preview_save(raw, filename)
+    filename_, save = _cached(preview["token"])
+    st = statics()
+    rows = []
+    for player, info in sorted(save.players.items()):
+        if info.get("minor") or info.get("spectator") or player >= FREE_CITIES_PLAYER or not info.get("cities"):
+            continue
+        map_data, cities, game, report = build_documents(save, player, filename_, difficulties=difficulties)
+        snapshot = {"map": map_data, "cities": cities, "game_state": game}
+        map_data, cities = validate_map_snapshot(snapshot)
+        state = validate_game_state_snapshot(game, cities, map_data)
+        ctx = context_for({"map": map_data, "cities": cities, "game": state}, st)
+        result = evaluate(ctx, include_details=True)
+        unread = set(report.get("needs_auto_assign") or [])
+        for city_id, item in sorted(result["cities"].items(), key=lambda kv: kv[1]["name"]):
+            totals = item["yields"]["totals"]
+            percent = item["yields"].get("percent") or {}
+            city = ctx.cities[city_id]
+            amenity = item.get("amenities") or {}
+            rows.append({
+                "save": filename_, "turn": save.turn_estimate, "player": player,
+                "civilization": info.get("civilization"), "leader": game["empire"].get("leader"),
+                "difficulty": ctx.player.handicap, "ai": not ctx.player.is_human,
+                "city": item["name"], "x": city.get("x"), "y": city.get("y"),
+                "population": item["population"],
+                "citizens_from_save": city_id not in unread,
+                **{k.lower(): _trunc(totals.get(k, 0.0)) for k in ("Food", "Production", "Gold", "Science", "Culture", "Faith")},
+                **{f"{k.lower()}_raw": round(totals.get(k, 0.0), 4) for k in ("Science", "Culture", "Gold", "Production", "Food", "Faith")},
+                **{f"percent_{k.lower()}": percent.get(k, 0.0) for k in ("Science", "Culture", "Gold", "Production")},
+                "amenity_score": amenity.get("score"), "amenity_state": amenity.get("happiness"),
+            })
+    return rows
+
+
+def export_city_yields_csv(raw: bytes, filename: str | None = None, difficulties: dict | None = None,
+                           header: bool = True) -> str:
+    import csv
+    import io
+
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=EXPORT_COLUMNS, extrasaction="ignore")
+    if header:
+        writer.writeheader()
+    for row in export_city_yields(raw, filename, difficulties):
+        writer.writerow(row)
+    return out.getvalue()

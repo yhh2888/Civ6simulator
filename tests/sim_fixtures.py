@@ -40,8 +40,10 @@ def real_db_payload() -> dict:
 
 
 def base_rules(**simulation) -> dict:
-    rules = load_game_rules(APP_DATA / "game_rules.json")
+    rules = load_game_rules(APP_DATA.parent / "config" / "game_rules.json")
     rules = deepcopy(rules)
+    # Engine tests check exact arithmetic; fixed-point % has its own tests.
+    simulation = {"fixed_point_percent": False, **simulation}
     if simulation:
         rules["simulation"] = {**rules.get("simulation", {}), **simulation}
     return rules

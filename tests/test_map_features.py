@@ -67,7 +67,7 @@ class MapFeatureTests(unittest.TestCase):
         write_json(self.data_dir / "cities.json", self.cities)
         write_json(self.data_dir / "catalog.json", {})
         self.rules = json.loads(
-            (Path(main.__file__).parent / "data" / "game_rules.json").read_text(
+            (Path(main.__file__).parent / "config" / "game_rules.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -672,6 +672,10 @@ class MapFeatureTests(unittest.TestCase):
             load_game_rules(self.data_dir / "game_rules.json")
 
     def test_missing_or_invalid_rules_fail_with_clear_api_error(self):
+        from app.core import paths
+
+        self.addCleanup(setattr, paths, "CONFIG", paths.CONFIG)
+        paths.CONFIG = self.data_dir  # no fallback to app/config
         rules_path = self.data_dir / "game_rules.json"
         rules_path.unlink()
         with self.assertRaisesRegex(RuleConfigurationError, "game_rules.json"):

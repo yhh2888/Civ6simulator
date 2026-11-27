@@ -148,11 +148,20 @@ def get_city(city_id: str, scenario_id: str | None = None) -> dict:
         "empire": state["empire"],
         "coverage": validation.coverage(),
         "trade_destinations": trade_destinations(ctx, city_id),
+        "governor_options": _governor_list(ctx.db),
+        "governor_establish_turns": int(ctx.db.param("GOVERNOR_BASE_TURNS_TO_ESTABLISH", 5) or 5),
         "great_work_options": [
             {"id": r["GreatWorkType"], "type": r.get("GreatWorkObjectType")}
             for r in ctx.db.rows("GreatWorks") if r.get("GreatWorkType") and ctx.db.group(
                 "GreatWork_YieldChanges", "GreatWorkType").get(r["GreatWorkType"])],
     }
+
+
+def _governor_list(db) -> list[dict]:
+    from app.services.empire_service import _governor_options
+
+    options = _governor_options(db)
+    return options.get("list", []) if options.get("available") else []
 
 
 def city_ledger(city_id: str, scenario_id: str | None = None) -> dict:
@@ -163,6 +172,48 @@ def city_ledger(city_id: str, scenario_id: str | None = None) -> dict:
     ledger = build_ledger(ctx, city_id)
     ledger["scenario_id"] = scenario_id
     return ledger
+
+
+def get_difficulties(scenario_id: str | None = None) -> dict:
+    from app.services import difficulty_service
+
+    st = statics()
+    bundle = load_bundle(scenario_id)
+    return difficulty_service.overview(st.db_for(bundle["game"]), bundle["game"], bundle["map"])
+
+
+def update_difficulties(payload: dict, scenario_id: str | None = None) -> dict:
+    from app.services import difficulty_service
+
+    st = statics()
+    bundle = copy_bundle(load_bundle(scenario_id))
+    db = st.db_for(bundle["game"])
+    before = evaluate(context_for(copy_bundle(bundle), st), include_details=False)
+    if "bonus_overrides" in payload:
+        difficulty_service.save_overrides(db, payload["bonus_overrides"])
+    bundle["game"]["difficulties"] = difficulty_service.clean(
+        db, {k: v for k, v in payload.items() if k != "bonus_overrides"}, bundle["game"].get("difficulties"))
+    after = evaluate(context_for(bundle, st), include_details=False)
+    commit_bundle(scenario_id, bundle)
+    impact = []
+    for city_id, city_after in after["cities"].items():
+        old = before["cities"].get(city_id)
+        if old:
+            impact.append({"city_id": city_id, "name": city_after["name"],
+                           "delta": {k: round(city_after["yields"]["totals"][k] - old["yields"]["totals"][k], 4)
+                                     for k in YIELD_KEYS}})
+    result = difficulty_service.overview(db, bundle["game"], bundle["map"])
+    result["impact"] = impact
+    return result
+
+
+def empire_ledger(yield_key: str, scenario_id: str | None = None) -> dict:
+    from app.services.yield_ledger_service import empire_yield_ledger
+
+    ctx = context_for(load_bundle(scenario_id))
+    result = empire_yield_ledger(ctx, yield_key)
+    result["scenario_id"] = scenario_id
+    return result
 
 
 def city_ledger_csv(city_id: str, scenario_id: str | None = None) -> tuple[str, str]:

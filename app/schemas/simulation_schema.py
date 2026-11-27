@@ -21,6 +21,11 @@ class CitySettingsRequest(BaseModel):
     custom_effects: list[dict[str, Any]] | None = None
     trade_routes: list[dict[str, Any]] | None = None
     great_works: list[str] | None = None
+    incoming_routes: list[dict[str, Any]] | None = None
+    governor: str | None = None
+    governor_promotions: list[str] | None = None
+    governor_established: bool | None = None
+    tile_adjustments: dict[str, dict[str, Any]] | None = None
 
 
 class TileCitizensRequest(BaseModel):
@@ -66,6 +71,7 @@ class EmpireUpdateRequest(BaseModel):
     treasury: dict[str, float] | None = None
     apply_amenity_effects: bool | None = None  # per-game override (game.simulation_overrides)
     city_states: dict[str, dict[str, Any]] | None = None  # {civ: {"envoys": n, "suzerain": bool}}
+    world_congress: list[dict[str, Any]] | None = None  # [{"resolution", "effect", "targets_me", "enabled"}]
 
 
 class ScenarioCreateRequest(BaseModel):

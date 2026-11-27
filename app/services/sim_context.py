@@ -28,6 +28,8 @@ DEFAULT_SIMULATION_SETTINGS: dict[str, Any] = {
     "overflow_policy": "carry_to_next",
     "research_overflow": "carry",
     "starvation_pop_loss": False,
+    # % modifiers kept as 1/256 fractions, each rounded (24 % → 61/256), as the game does.
+    "fixed_point_percent": True,
     "max_simulation_turns": 100,
     "default_citizen_mode": "manual",
     "default_strategy": "balanced",
@@ -173,6 +175,11 @@ class PlayerView:
     capital_id: str | None
     # civilization type → {"envoys": int, "suzerain": bool} (user-entered)
     city_states: dict[str, dict] = field(default_factory=dict)
+    # [{"resolution", "effect": 1|2, "target_kind", "targets_me"}] (World Congress)
+    world_congress: list[dict] = field(default_factory=list)
+    # difficulty_service: handicap of this civilization and whether a human plays it
+    handicap: str = "DIFFICULTY_PRINCE"
+    is_human: bool = True
 
 
 @dataclass
@@ -315,8 +322,11 @@ def _player_view(cities: dict, game: dict, empire: dict, db: RulesDB) -> PlayerV
             envoys = int(as_float(entry.get("envoys")))
             if envoys > 0 or entry.get("suzerain"):
                 city_states[civ] = {"envoys": max(0, envoys), "suzerain": bool(entry.get("suzerain"))}
+    congress = [dict(item) for item in empire.get("world_congress") or []
+                if isinstance(item, dict) and item.get("enabled", True) is not False]
     return PlayerView(
         city_states=city_states,
+        world_congress=congress,
         technologies=technologies,
         civics=civics,
         government=empire.get("government"),
@@ -363,6 +373,9 @@ def refresh_views(ctx: EngineContext) -> None:
     map_data, cities, db = ctx.map, ctx.cities, ctx.db
     ctx.empire = empire_settings(ctx.game)
     ctx.player = _player_view(cities, ctx.game, ctx.empire, db)
+    from app.services.difficulty_service import for_player
+
+    ctx.player.handicap, ctx.player.is_human = for_player(ctx.game, map_data)
     ctx.city_views = {}
     owned: dict[str, list[dict]] = {city_id: [] for city_id in cities}
     for tile in map_data.get("tiles", []):
@@ -385,10 +398,15 @@ def refresh_views(ctx: EngineContext) -> None:
         for district in city.get("districts") or []:
             if isinstance(district, str):
                 district_types |= ctx.district_aliases(district)
+        # Pillaged buildings stay built (prerequisites) but give nothing until repaired.
+        pillaged = set(city.get("pillaged_buildings") or [])
         buildings = [b for b in dict.fromkeys(city.get("buildings") or []) if isinstance(b, str)]
-        wonders = [w for w in dict.fromkeys(city.get("wonders") or []) if isinstance(w, str)]
         building_types: set[str] = set()
-        for building in buildings + wonders:
+        for building in buildings:
+            building_types |= ctx.building_aliases(building)
+        buildings = [b for b in buildings if b not in pillaged]
+        wonders = [w for w in dict.fromkeys(city.get("wonders") or []) if isinstance(w, str)]
+        for building in wonders:
             building_types |= ctx.building_aliases(building)
         ctx.city_views[city_id] = CityView(
             city=city,

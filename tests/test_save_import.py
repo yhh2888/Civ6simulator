@@ -212,7 +212,7 @@ class SaveImportApiTests(unittest.TestCase):
         self.data = Path(self.temp.name) / "data"
         self.data.mkdir()
         for name in ("catalog.json", "rules_db.json", "game_rules.json", "data_audit_report.json"):
-            shutil.copy(APP_DATA / name, self.data / name)
+            shutil.copy((APP_DATA.parent / "config" if name == "game_rules.json" else APP_DATA) / name, self.data / name)
         game_map = make_map()
         city = make_city(population=2, stored_food=0.0)
         claim(game_map, city)
@@ -274,12 +274,15 @@ class SaveImportApiTests(unittest.TestCase):
         ledger = self.client.get(f"/api/sim/cities/{city['id']}/ledger")
         self.assertEqual(ledger.status_code, 200, ledger.text)
         self.assertEqual(self.client.post("/api/sim/turn/preview", json={"turns": 2}).status_code, 200)
-        # Amenity effects start switched off for imported games; the empire panel can turn them on.
+        # Amenity effects follow app/config/save_import.json; the empire panel can switch them.
+        from app.services import app_config_service as cfg
+
+        default = cfg.get("save_import.json", "apply_amenity_effects") is True
         options = self.client.get("/api/sim/empire/options").json()
-        self.assertFalse(options["current"]["apply_amenity_effects"])
-        updated = self.client.put("/api/sim/empire", json={"apply_amenity_effects": True})
+        self.assertEqual(options["current"]["apply_amenity_effects"], default)
+        updated = self.client.put("/api/sim/empire", json={"apply_amenity_effects": not default})
         self.assertEqual(updated.status_code, 200, updated.text)
-        self.assertTrue(self.client.get("/api/sim/empire/options").json()["current"]["apply_amenity_effects"])
+        self.assertEqual(self.client.get("/api/sim/empire/options").json()["current"]["apply_amenity_effects"], not default)
         # Foreign cities kept on the map are trade route destinations.
         dests = self.client.get(f"/api/sim/cities/{city['id']}").json()["trade_destinations"]
         self.assertEqual([(d["name"], d["kind"]) for d in dests], [("Otherton", "international")])
@@ -422,7 +425,10 @@ class PlayerStateTests(unittest.TestCase):
         self.assertEqual(game["research"]["civic"]["progress"], {self.civics[3]: 7.0})
         self.assertEqual(empire["boosted"]["technology"], [self.techs[5]])
         self.assertEqual(report["player_state"]["government"], "GOVERNMENT_MONARCHY")
-        self.assertEqual(game["simulation_overrides"], {"apply_amenity_effects": False})
+        from app.services import app_config_service as cfg
+
+        self.assertEqual(game["simulation_overrides"],
+                         {"apply_amenity_effects": cfg.get("save_import.json", "apply_amenity_effects") is True})
 
     def test_envoys_suzerain_and_pantheon(self):
         state = self.save.player_states[0]

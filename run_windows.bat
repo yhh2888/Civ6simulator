@@ -3,14 +3,14 @@ setlocal
 cd /d "%~dp0"
 set "PORT=8010"
 set "URL=http://127.0.0.1:%PORT%/"
-title Civ VI City Studio - CITY SIMULATOR v0.5.1
+title Civ VI City Studio - CITY SIMULATOR v0.5.2
 echo =============================================
-echo Civ VI City Studio - CITY SIMULATOR v0.5.1
+echo Civ VI City Studio - CITY SIMULATOR v0.5.2
 echo Project folder: %CD%
 echo =============================================
 
 rem Already running on this port? Just open the browser.
-curl -s -m 2 "%URL%health" 2>nul | find "0.5.1" >nul
+curl -s -m 2 "%URL%health" 2>nul | find "0.5.2" >nul
 if not errorlevel 1 (
   echo Server already running - opening %URL%
   start "" "%URL%"

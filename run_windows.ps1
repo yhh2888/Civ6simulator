@@ -1,13 +1,13 @@
 Set-Location $PSScriptRoot
 $Port = 8010
 $Url = "http://127.0.0.1:$Port/"
-Write-Host "Civ VI City Studio - CITY SIMULATOR v0.5.1" -ForegroundColor Green
+Write-Host "Civ VI City Studio - CITY SIMULATOR v0.5.2" -ForegroundColor Green
 Write-Host "Project folder: $PWD"
 
 # Already running? Just open the browser.
 try {
   $health = Invoke-RestMethod -Uri "$($Url)health" -TimeoutSec 2
-  if ($health.version -eq "0.5.1") { Write-Host "Server already running - opening $Url"; Start-Process $Url; exit 0 }
+  if ($health.version -eq "0.5.2") { Write-Host "Server already running - opening $Url"; Start-Process $Url; exit 0 }
 } catch { }
 
 if (-not (Test-Path ".venv/Scripts/python.exe")) { py -m venv .venv }

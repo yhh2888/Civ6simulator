@@ -40,7 +40,7 @@ COVERAGE: list[dict[str, Any]] = [
     {"id": "traits", "label": "문명·지도자 특성", "status": "부분 구현", "basis": "CivilizationTraits/LeaderTraits → TraitModifiers, 고유 유닛/건물/지구 대체"},
     {"id": "technology_civic", "label": "기술·사회제도 Modifier", "status": "부분 구현", "basis": "TechnologyModifiers, CivicModifiers"},
     {"id": "religion", "label": "판테온·신앙", "status": "부분 구현", "basis": "BeliefModifiers; 자국 도시가 판테온을 따른다고 가정, 종교 전파 미지원"},
-    {"id": "governors", "label": "총독", "status": "미지원", "basis": "Data.zip에 Governors 테이블 없음 (확장팩 규칙)"},
+    {"id": "governors", "label": "총독", "status": "미검증", "basis": "확장팩 규칙의 GovernorPromotionModifiers (정착 완료 후 적용, 세이브에서 위치·진급·정착 턴 읽음). 기본 게임 데이터에는 없음"},
     {"id": "trade_routes", "label": "교역로", "status": "미지원", "basis": "교역로 생성·경로·산출 시뮬레이션 없음"},
     {"id": "amenities", "label": "쾌적도 (요구량·상태 효과)", "status": "부분 구현", "basis": "CITY_POP_PER_AMENITY, Happinesses; 사치 자원 분배 순서는 근사"},
     {"id": "housing", "label": "주거공간", "status": "부분 구현", "basis": "CITY_POPULATION_* 파라미터, Buildings/Districts/Improvements.Housing; 호수 구분 데이터 없음"},

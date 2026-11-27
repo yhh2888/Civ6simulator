@@ -293,8 +293,45 @@ def apply_city_settings(ctx: EngineContext, city_id: str, payload: dict) -> dict
         from app.services.trade_route_service import sanitize_routes
 
         city["trade_routes"] = sanitize_routes(payload["trade_routes"], ctx, city_id)
+    if "incoming_routes" in payload and payload["incoming_routes"] is not None:
+        from app.services.trade_route_service import sanitize_incoming
+
+        city["incoming_routes"] = sanitize_incoming(payload["incoming_routes"])
+    if "governor" in payload:
+        governor = payload.get("governor") or None
+        if governor and governor not in ctx.db.index("Governors", "GovernorType"):
+            raise ApplicationError(422, f"알 수 없는 총독 {governor}")
+        if governor != city.get("governor"):
+            city["governor_promotions"] = []
+        city["governor"] = governor
+    if payload.get("governor_promotions") is not None:
+        promotions = payload["governor_promotions"]
+        allowed = {r.get("GovernorPromotion") for r in ctx.db.rows("GovernorPromotionSets")
+                   if r.get("GovernorType") == city.get("governor")}
+        if not isinstance(promotions, list) or any(p not in allowed for p in promotions):
+            raise ApplicationError(422, "governor_promotions는 이 총독의 진급 목록이어야 합니다.")
+        city["governor_promotions"] = list(dict.fromkeys(promotions))
+    if payload.get("governor_established") is not None:
+        city["governor_established"] = bool(payload["governor_established"])
+    if payload.get("tile_adjustments") is not None:
+        city["tile_adjustments"] = _clean_tile_adjustments(payload["tile_adjustments"])
     refresh_views(ctx)
     return city
+
+
+def _clean_tile_adjustments(value: Any) -> dict:
+    if not isinstance(value, dict) or len(value) > 60:
+        raise ApplicationError(422, "tile_adjustments는 {\"x,y\": {\"yields\": {...}, \"note\": ...}} 형식입니다 (최대 60칸).")
+    cleaned = {}
+    for key, entry in value.items():
+        parts = str(key).split(",")
+        if len(parts) != 2 or not all(p.strip().lstrip("-").isdigit() for p in parts) or not isinstance(entry, dict):
+            raise ApplicationError(422, f"tile_adjustments 항목 {key!r} 형식 오류")
+        yields = {k: max(-50.0, min(50.0, as_float(v))) for k, v in (entry.get("yields") or {}).items()
+                  if k in PRESETS["custom"]["weights"] and as_float(v)}
+        if yields:
+            cleaned[f"{int(parts[0])},{int(parts[1])}"] = {"yields": yields, "note": str(entry.get("note") or "")[:80]}
+    return cleaned
 
 
 def assignment_keys(assignment: dict[str, int]) -> list[tuple[int, int]]:

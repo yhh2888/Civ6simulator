@@ -154,6 +154,38 @@ def _plot_check(attr: str, arg: str):
     return check
 
 
+def _req_plot_improvement(ctx, subject, args) -> Outcome:
+    """A pillaged improvement counts as absent (it gives nothing until repaired)."""
+    tile = _subject_tile(ctx, subject)
+    if tile is None:
+        return None, "타일 대상이 아님"
+    expected = args.get("ImprovementType")
+    if tile.get("improvement_pillaged"):
+        return False, f"타일 시설 {tile.get('improvement')}이 약탈됨 / 요구 {expected}"
+    return tile.get("improvement") == expected, f"타일 improvement={tile.get('improvement')} / 요구 {expected}"
+
+
+def player_era(ctx) -> str | None:
+    """The player's era: the latest era among researched technologies and civics."""
+    best, best_index = None, -1
+    for table, key, owned in (("Technologies", "TechnologyType", ctx.player.technologies),
+                              ("Civics", "CivicType", ctx.player.civics)):
+        index = ctx.db.index(table, key)
+        for item in owned:
+            era = (index.get(item) or {}).get("EraType")
+            if era and ctx.era_index(era) > best_index:
+                best, best_index = era, ctx.era_index(era)
+    return best
+
+
+def _req_era_at_least(ctx, subject, args) -> Outcome:
+    era = player_era(ctx)
+    need = args.get("EraType")
+    if era is None or not need:
+        return None, "시대를 알 수 없음"
+    return ctx.era_index(era) >= ctx.era_index(need), f"플레이어 시대 {era} (연구한 기술·사회제도 중 최신) ≥ {need}"
+
+
 def _req_terrain_class(ctx, subject, args) -> Outcome:
     tile = _subject_tile(ctx, subject)
     if tile is None:
@@ -267,7 +299,18 @@ def _req_completed_project(ctx, subject, args) -> Outcome:
 
 
 def _req_is_human(ctx, subject, args) -> Outcome:
-    return True, "시뮬레이션 플레이어는 사람으로 간주"
+    human = getattr(ctx.player, "is_human", True)
+    return human, "난이도 설정: 사람" if human else "난이도 설정: AI"
+
+
+def _req_handicap_at_or_above(ctx, subject, args) -> Outcome:
+    from app.services.difficulty_service import level_index
+
+    mine = level_index(ctx.db, getattr(ctx.player, "handicap", None))
+    need = level_index(ctx.db, args.get("Handicap"))
+    if mine is None or need is None:
+        return None, "난이도를 알 수 없음"
+    return mine >= need, f"난이도 {ctx.player.handicap} ≥ {args.get('Handicap')}"
 
 
 def _req_capital_continent(ctx, subject, args) -> Outcome:
@@ -279,6 +322,22 @@ def _req_capital_continent(ctx, subject, args) -> Outcome:
     if tile.get("continent") is None or capital_tile is None or capital_tile.get("continent") is None:
         return None, "지도에 대륙 정보 없음"
     return tile.get("continent") == capital_tile.get("continent"), "수도와 같은 대륙"
+
+
+def _req_near_capital(ctx, subject, args) -> Outcome:
+    """REQUIREMENT_PLOT_NEAR_CAPITAL: hex distance to the capital within
+    [MinDistance, MaxDistance] (Lady Six Sky: 1–6 → +10 %, 7+ → −15 %)."""
+    tile = _subject_tile(ctx, subject)
+    capital = ctx.city_views.get(ctx.player.capital_id or "")
+    if tile is None or capital is None:
+        return None, "타일 또는 수도 없음"
+    from app.services.sim_context import hex_distance
+
+    distance = hex_distance(tile["x"], tile["y"], *capital.center)
+    low = int(float(args.get("MinDistance") or 0))
+    high = args.get("MaxDistance")
+    ok = distance >= low and (high in (None, "") or distance <= int(float(high)))
+    return ok, f"수도까지 거리 {distance} (조건 {low}~{high or '∞'})"
 
 
 def _req_plot_is_lake(ctx, subject, args) -> Outcome:
@@ -294,7 +353,7 @@ def _req_resource_owned(ctx, subject, args) -> Outcome:
     resource = args.get("ResourceType")
     for view in ctx.city_views.values():
         for tile in view.tiles:
-            if tile.get("resource") == resource and tile.get("improvement"):
+            if tile.get("resource") == resource and tile.get("improvement") and not tile.get("improvement_pillaged"):
                 return True, f"영토 내 개량된 {resource}"
     return False, f"영토 내 개량된 {resource} 없음 (근사)"
 
@@ -318,7 +377,7 @@ REQUIREMENT_HANDLERS: dict[str, Callable[[EngineContext, Subject, dict], Outcome
     "REQUIREMENT_PLOT_TERRAIN_TYPE_MATCHES": _plot_check("terrain", "TerrainType"),
     "REQUIREMENT_PLOT_FEATURE_TYPE_MATCHES": _plot_check("feature", "FeatureType"),
     "REQUIREMENT_PLOT_RESOURCE_TYPE_MATCHES": _plot_check("resource", "ResourceType"),
-    "REQUIREMENT_PLOT_IMPROVEMENT_TYPE_MATCHES": _plot_check("improvement", "ImprovementType"),
+    "REQUIREMENT_PLOT_IMPROVEMENT_TYPE_MATCHES": _req_plot_improvement,
     "REQUIREMENT_PLOT_TERRAIN_CLASS_MATCHES": _req_terrain_class,
     "REQUIREMENT_PLOT_RESOURCE_CLASS_TYPE_MATCHES": _req_resource_class,
     "REQUIREMENT_PLOT_RESOURCE_TAG_MATCHES": _req_resource_tag,
@@ -328,7 +387,7 @@ REQUIREMENT_HANDLERS: dict[str, Callable[[EngineContext, Subject, dict], Outcome
         lambda ctx, t, a: t.get("feature") == a.get("FeatureType"), "지형 특성"
     ),
     "REQUIREMENT_PLOT_ADJACENT_IMPROVEMENT_TYPE_MATCHES": _adjacent_check(
-        lambda ctx, t, a: t.get("improvement") == a.get("ImprovementType"), "시설"
+        lambda ctx, t, a: t.get("improvement") == a.get("ImprovementType") and not t.get("improvement_pillaged"), "시설"
     ),
     "REQUIREMENT_PLOT_ADJACENT_RESOURCE_CLASS_TYPE_MATCHES": _adjacent_check(
         lambda ctx, t, a: bool(t.get("resource"))
@@ -348,7 +407,10 @@ REQUIREMENT_HANDLERS: dict[str, Callable[[EngineContext, Subject, dict], Outcome
     "REQUIREMENT_CITY_FOLLOWS_RELIGION": _req_follows_religion,
     "REQUIREMENT_PLAYER_HAS_COMPLETED_PROJECT": _req_completed_project,
     "REQUIREMENT_PLAYER_IS_HUMAN": _req_is_human,
+    "REQUIREMENT_PLAYER_HANDICAP_AT_OR_ABOVE": _req_handicap_at_or_above,
+    "REQUIREMENT_PLAYER_ERA_AT_LEAST": _req_era_at_least,
     "REQUIREMENT_PLOT_IS_OWNER_CAPITAL_CONTINENT": _req_capital_continent,
+    "REQUIREMENT_PLOT_NEAR_CAPITAL": _req_near_capital,
     "REQUIREMENT_PLOT_IS_LAKE": _req_plot_is_lake,
     "REQUIREMENT_PLAYER_HAS_RESOURCE_OWNED": _req_resource_owned,
 }

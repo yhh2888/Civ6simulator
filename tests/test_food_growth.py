@@ -27,7 +27,7 @@ class FoodGrowthTests(unittest.TestCase):
         self.saved_dir = self.data_dir / "saved_maps"
         self.game_state_path = self.data_dir / "game_state.json"
         self.rules = load_game_rules(
-            Path(main.__file__).parent / "data" / "game_rules.json"
+            Path(main.__file__).parent / "config" / "game_rules.json"
         )
         self.data_dir.mkdir()
         self._patches = [

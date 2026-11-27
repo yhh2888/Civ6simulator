@@ -155,6 +155,10 @@ class SaveTile:
     wonder: str | None = None
     offset: int = 0  # record offset in the body (debugging, yield overlays)
     extra: int = 0   # bytes after the 55-byte base record
+    # byte 48 bit 0: the improvement is pillaged. On a turn-90 save the bit is
+    # set on 15 tiles, all with an improvement (never on empty plots or
+    # districts), including the truffle camp the game shows at 3 gold instead of 5.
+    pillaged: bool = False
 
 
 @dataclass
@@ -214,6 +218,15 @@ class SaveData:
     # [{"origin": (x, y), "origin_player", "destination": (x, y),
     #   "destination_player", "started_turn"}]
     trade_routes: list[dict] = field(default_factory=list)
+    # [{"type", "owner", "city_index", "turns", "promotions"}] (named records only)
+    governors: list[dict] = field(default_factory=list)
+    # [{"resolution", "target_kind", "target", "votes": [1|2, ...], "effect"}]
+    congress: list[dict] = field(default_factory=list)
+    # great works by city: (player, city_index) → [GREATWORK_...]
+    great_works: dict = field(default_factory=dict)
+    # (x, y) → {"YIELD_FOOD": 1, ...}: permanent plot yields added by
+    # natural events (flood, volcano, storm fertility)
+    plot_yields: dict = field(default_factory=dict)
 
     def tile(self, x: int, y: int) -> SaveTile:
         return self.tiles[y * self.width + x]
@@ -310,6 +323,7 @@ def _parse_tiles(body: bytes, names: TypeNames) -> tuple[int, int, list[SaveTile
                 city_index=city_index,
                 district_id=district_id,
                 wonder=wonder,
+                pillaged=bool(improvement not in (0, 0xFFFFFFFF) and _u8(body, m + 48) & 1),
             )
         )
         m += TILE_BASE + extra
@@ -443,6 +457,25 @@ def _production(body: bytes, names: TypeNames, start: int, end: int) -> tuple[di
     return entry, q
 
 
+def _building_damage_flags(body: bytes, start: int, end: int, buildings: dict[bytes, str]) -> dict[str, int]:
+    """Per-building u8 after each hash in the city's stride-5 building table.
+    1 = pillaged (needs repair): on a turn-90 save only Mediolanum's water
+    mill, which the game shows as needing repair, has it set."""
+    o = start
+    while o + 14 <= end:
+        if body[o:o + 4] in buildings and body[o + 5:o + 9] in buildings and body[o + 10:o + 14] in buildings:
+            while o - 5 >= start and body[o - 5:o - 1] in buildings:
+                o -= 5
+            flags = {}
+            while o + 5 <= end and body[o:o + 4] in buildings:
+                flags[buildings[body[o:o + 4]]] = body[o + 4]
+                o += 5
+            if len(flags) >= 10 and all(v in (0, 1) for v in flags.values()):
+                return flags
+        o += 1
+    return {}
+
+
 def _building_tables(body: bytes, start: int, end: int, buildings: dict[bytes, str]) -> list[list[tuple[str, int]]]:
     """All (count-prefixed or not) stride-6 BUILDING tables in [start, end)."""
     tables = []
@@ -505,8 +538,10 @@ def _parse_cities(body: bytes, names: TypeNames, width: int, height: int, tiles:
         if chosen is None:
             warnings.append(f"{pretty_city_name(obj['raw_name'])}: 건물 목록을 확인하지 못해 비워 두었습니다.")
             chosen = []
+        damaged = _building_damage_flags(body, obj["offset"] + 4000, end, buildings)
         for name, plot in chosen:
-            built.append({"type": name, "x": plot % width, "y": plot // width})
+            built.append({"type": name, "x": plot % width, "y": plot // width,
+                          **({"pillaged": True} if damaged.get(name) else {})})
         owned = sum(1 for t in tiles if t.player == centre.player and t.city_index == centre.city_index)
         citizens, population = _citizens(obj, centre, own_districts, tiles, width, height)
         production, production_at = _production(body, names, obj["offset"], end)
@@ -795,6 +830,12 @@ def _player_states(body: bytes, names: TypeNames, cities: list[SaveCity], warnin
     # Majors from the setup slots (leaders not LEADER_MINOR_CIV_*).
     majors = {p for p, slot in (slots or {}).items() if not slot.get("minor")}
     arrays = _envoy_arrays(body, majors) if majors else []
+    # Only arrays inside a major's block count; city-states keep similar
+    # arrays in their own blocks (a turn-90 save has one in Kabul's block with
+    # Auckland 7 / Kabul 11 that no major sent), which would otherwise wrongly
+    # outbid the real suzerain.
+    owner_at = _block_owner(cities)
+    arrays = [(offset, tokens) for offset, tokens in arrays if owner_at(offset) in majors]
     for player in list(states):
         if player not in majors:
             continue
@@ -830,18 +871,9 @@ def _player_states(body: bytes, names: TypeNames, cities: list[SaveCity], warnin
     return states
 
 
-def _trade_routes(body: bytes, cities: list[SaveCity]) -> list[dict]:
-    """Traders' MAKE_TRADE_ROUTE operations.
-
-    Layout after the UNITOPERATION_MAKE_TRADE_ROUTE hash: +16 i32 turn the
-    route started, +36 destination x, y, +44 origin x, y (both city centres).
-    Verified against the game: Alexandria→Madrid (turn 82), Pella→Toledo,
-    Mohenjo Daro→Madrid.
-    """
-    centres = {(c.x, c.y): c.player for c in cities}
-    # The record sits in its owner's block (first city of the owner ≤ offset <
-    # next player's first city). City-states' traders also run routes from
-    # major cities' coordinates, so ownership comes from the block, not the origin.
+def _block_owner(cities: list[SaveCity]):
+    """offset → player whose block holds it (first city of the owner ≤ offset <
+    next player's first city)."""
     first_city: dict[int, int] = {}
     for city in sorted(cities, key=lambda c: c.offset):
         first_city.setdefault(city.player, city.offset)
@@ -854,6 +886,261 @@ def _trade_routes(body: bytes, cities: list[SaveCity]) -> list[dict]:
                 owner = player
         return owner
 
+    return owner_at
+
+
+GOVERNOR_NAME = re.compile(rb"LOC_GOVERNOR_[A-Z_]+_NAME")
+
+
+RECORD_SPAN = 160
+
+
+def _governors(body: bytes, names: TypeNames, cities: list[SaveCity]) -> list[dict]:
+    """Appointed governors.
+
+    Each appointed governor is stored as GOVERNOR_ hash, u32 length, its
+    LOC_..._NAME string, then a record whose first bytes are
+    00, u16 ?, u16 city index, u16 city id; the same (index, id) pair appears
+    again near the end followed by u16 turns spent in the city (5 = the
+    GOVERNOR_BASE_TURNS_TO_ESTABLISH value, so established). The promotion list
+    follows: 5-byte entries (promotion hash, u8 has-it flag).
+    Checked on a turn-90 save: Liang in Puteoli (5), Magnus in Aigai (5),
+    Pingala in Pella with 3 turns (game: establishing, 2 turns left).
+    Only governors stored with a name string are found. AI governors may
+    have no promotion list (Kongo's Moksha in Mbanza Kongo, turn 31: base
+    title only, 5 turns, established).
+    """
+    owner_at = _block_owner(cities)
+    found = []
+    for match in GOVERNOR_NAME.finditer(body):
+        start = match.start() - 8
+        if start < 0:
+            continue
+        governor = names.name(_u32(body, start))
+        if not governor or not governor.startswith("GOVERNOR_") or governor.startswith("GOVERNOR_PROMOTION"):
+            continue
+        if _u32(body, match.start() - 4) != match.end() - match.start():
+            continue
+        # One byte (0 on the player's own governors, 5 on an AI's established
+        # Moksha) separates the name from the record.
+        record_start = match.end() + 1
+        o = record_start
+        while o < record_start + RECORD_SPAN and o + 4 <= len(body):
+            name = names.name(_u32(body, o))
+            if name and name.startswith("GOVERNOR_PROMOTION"):
+                break
+            o += 1
+        # AI governors can have no promotion list: the record then ends where
+        # the (index, id, turns) tail does, within RECORD_SPAN bytes.
+        record = body[record_start:o]
+        if len(record) < 16:
+            continue
+        city_index, city_id = struct.unpack_from("<HH", record, 3)
+        pair = struct.pack("<HH", city_index, city_id)
+        turns = None
+        tail = record.rfind(pair)
+        if tail > 6 and tail + 6 <= len(record):
+            turns = _u16(record, tail + 4)
+        promotions = []
+        while o + 5 <= len(body):
+            name = names.name(_u32(body, o))
+            if not name or not name.startswith("GOVERNOR_PROMOTION"):
+                break
+            if body[o + 4]:
+                promotions.append(name)
+            o += 5
+        found.append({"type": governor, "owner": owner_at(start),
+                      "city_index": None if city_index == 0xFFFF else city_index,
+                      "turns": turns, "promotions": promotions, "offset": start})
+    return found
+
+
+def _congress(body: bytes, names: TypeNames) -> list[dict]:
+    """World Congress resolutions of the last session (heuristic).
+
+    The session stores, per resolution that was voted on: resolution hash,
+    its TargetKind hash (PLAYER, RESOURCE, ...), i32 chosen target, then one
+    i32 per voter with the effect voted for (1 = A, 2 = B), padded with -1.
+    The effect that got more votes is taken as the result. Checked on a
+    turn-90 save: Trade Treaty with target player 0 and votes 7×A / 3×B, which
+    matches the +4 gold on routes into that player's cities in game.
+    """
+    resolutions = {name: value for value, name in names.with_prefix("WC_RES_").items()}
+    kinds = {}
+    for kind in ("PLAYER", "RESOURCE", "YIELD", "DISTRICT", "BUILDING", "PROJECT", "RELIGION", "FEATURE",
+                 "GOVERNMENT", "GREATPERSONCLASS", "GREATWORKOBJECT", "MINORCIVBONUS", "UNITOPERATION",
+                 "UNITPROMOTIONCLASS"):
+        kinds[type_hash(kind)] = kind
+    found = {}
+    for name, value in resolutions.items():
+        marker = struct.pack("<I", value)
+        q = body.find(marker)
+        while q >= 0:
+            if q + 16 <= len(body) and _u32(body, q + 4) in kinds:
+                target = struct.unpack_from("<i", body, q + 8)[0]
+                votes = []
+                o = q + 12
+                while o + 4 <= len(body) and len(votes) < 64:
+                    v = struct.unpack_from("<i", body, o)[0]
+                    if v not in (1, 2):
+                        break
+                    votes.append(v)
+                    o += 4
+                if votes:
+                    a, b = votes.count(1), votes.count(2)
+                    found[name] = {"resolution": name, "target_kind": kinds[_u32(body, q + 4)], "target": target,
+                                   "votes": votes, "effect": 1 if a > b else 2 if b > a else None,
+                                   "offset": q}
+            q = body.find(marker, q + 1)
+    return sorted(found.values(), key=lambda item: item["offset"])
+
+
+PLOT_YIELD_ORDER = ("YIELD_FOOD", "YIELD_PRODUCTION", "YIELD_GOLD", "YIELD_SCIENCE", "YIELD_CULTURE", "YIELD_FAITH")
+
+
+def _great_work_list(body: bytes, names: TypeNames) -> list[str]:
+    """Every great work created so far, in creation order (its index is what
+    city slots refer to): u32 count, then per work u32 6, GREATWORK hash,
+    u32 player, u32 turn, u32 length + creator name."""
+    works = {struct.pack("<I", h): n for h, n in names.with_prefix("GREATWORK_").items()}
+    if not works:
+        return []
+    pattern = re.compile(b"|".join(re.escape(k) for k in works))
+    for match in pattern.finditer(body):
+        start = match.start() - 8
+        if start < 0:
+            continue
+        count = _u32(body, start)
+        if not 1 <= count <= 2000 or _u32(body, start + 4) != 6:
+            continue
+        o, found = start + 4, []
+        for _ in range(count):
+            if o + 20 > len(body) or _u32(body, o) != 6 or body[o + 4:o + 8] not in works:
+                found = None
+                break
+            found.append(works[body[o + 4:o + 8]])
+            length = _u32(body, o + 16)
+            if length > 200:
+                found = None
+                break
+            o += 20 + length
+        if found:
+            return found
+    return []
+
+
+def _city_great_works(body: bytes, start: int, end: int, built: set[str], work_list: list[str],
+                      buildings: dict[bytes, str]) -> list[str]:
+    """Great works in a city's buildings: u32 building count, then per building
+    its hash, u32 slot count and per slot three u32 (the last is the index into
+    the great work list, 0xFFFFFFFF for an empty slot). Checked on a turn-90 save: Pella palace → Rumi's
+    Divani (+4 culture), Mohenjo-daro amphitheater → Sun Tzu and Chaucer."""
+    for match in re.finditer(b"|".join(re.escape(k) for k in buildings), body[start:end]):
+        p = start + match.start()
+        if buildings.get(body[p:p + 4]) not in built or p < start + 4:
+            continue
+        count = _u32(body, p - 4)
+        if not 1 <= count <= 12:
+            continue
+        o, result = p, []
+        for _ in range(count):
+            name = buildings.get(body[o:o + 4])
+            n = _u32(body, o + 4) if o + 8 <= end else 99
+            if name not in built or not 0 <= n <= 8 or o + 8 + 12 * n > end:
+                result = None
+                break
+            for k in range(n):
+                index = _u32(body, o + 8 + 12 * k + 8)
+                if index == 0xFFFFFFFF:
+                    continue  # empty slot
+                if index >= len(work_list):
+                    result = None
+                    break
+                result.append(work_list[index])
+            if result is None:
+                break
+            o += 8 + 12 * n
+        if result is not None and o > p:
+            return result
+    return []
+
+
+def _great_works_by_city(body: bytes, names: TypeNames, cities: list[SaveCity]) -> dict:
+    work_list = _great_work_list(body, names)
+    if not work_list:
+        return {}
+    buildings = {struct.pack("<I", h): n for h, n in names.with_prefix("BUILDING_").items()}
+    ordered = sorted(cities, key=lambda c: c.offset)
+    result = {}
+    for number, city in enumerate(ordered):
+        end = ordered[number + 1].offset if number + 1 < len(ordered) else city.offset + 30000
+        end = min(end, city.offset + 30000)
+        built = {b["type"] for b in city.buildings}
+        works = _city_great_works(body, city.offset, end, built, work_list, buildings) if built else []
+        if works:
+            result[(city.player, city.city_index)] = works
+    return result
+
+
+def _plot_yields(body: bytes, width: int, height: int, start: int = 0) -> dict:
+    """Permanent yield changes on plots (natural-event fertility).
+
+    The map section stores a yield template — u32 6 then six (yield hash,
+    i32 0) pairs — followed by u32 plot count, one i32 per plot (−1 or an
+    index into the list below), u32 entry count and the entries, each again
+    u32 6 + six (yield hash, i32 amount). Checked on two saves one turn apart:
+    after a major flood of the Gambia the two floodplains next to the oil
+    east of Niani read +1 food and +1 food +1 production, the values the game
+    shows (2 → 3 food, 2 → 3 food 1 production).
+    """
+    plots = width * height
+    template = struct.pack("<I", 6) + b"".join(struct.pack("<Ii", type_hash(y), 0) for y in PLOT_YIELD_ORDER)
+    marker = template + struct.pack("<I", plots)
+    q = body.find(marker, start)
+    if q < 0:
+        return {}
+    o = q + len(marker)
+    if o + plots * 4 + 4 > len(body):
+        return {}
+    slots = struct.unpack_from(f"<{plots}i", body, o)
+    o += plots * 4
+    count = _u32(body, o)
+    o += 4
+    if count > plots:
+        return {}
+    names = {type_hash(y): y for y in PLOT_YIELD_ORDER}
+    entries = []
+    for _ in range(count):
+        n = _u32(body, o)
+        o += 4
+        if n > 16 or o + n * 8 > len(body):
+            return {}
+        values = {}
+        for k in range(n):
+            h, amount = struct.unpack_from("<Ii", body, o + k * 8)
+            if h in names and amount:
+                values[names[h]] = amount
+        o += n * 8
+        entries.append(values)
+    result = {}
+    for index, slot in enumerate(slots):
+        if 0 <= slot < len(entries) and entries[slot]:
+            result[(index % width, index // width)] = dict(entries[slot])
+    return result
+
+
+def _trade_routes(body: bytes, cities: list[SaveCity]) -> list[dict]:
+    """Traders' MAKE_TRADE_ROUTE operations.
+
+    Layout after the UNITOPERATION_MAKE_TRADE_ROUTE hash: +16 i32 turn the
+    route started, +36 destination x, y, +44 origin x, y (both city centres).
+    Verified against the game: Alexandria→Madrid (turn 82), Pella→Toledo,
+    Mohenjo Daro→Madrid.
+    """
+    centres = {(c.x, c.y): c.player for c in cities}
+    # City-states' traders also run routes from major cities' coordinates, so
+    # ownership comes from the block, not the origin.
+    owner_at = _block_owner(cities)
     marker = struct.pack("<I", type_hash("UNITOPERATION_MAKE_TRADE_ROUTE"))
     routes, seen = [], set()
     q = body.find(marker)
@@ -927,6 +1214,10 @@ def decode_container(container: SaveContainer, names: TypeNames) -> SaveData:
         turn_estimate=_turn_estimate(body), players=players, warnings=warnings,
         unknown_types=dict(unknown.most_common()), stats=stats, player_states=player_states,
         trade_routes=_trade_routes(body, cities),
+        governors=_governors(body, names, cities),
+        congress=_congress(body, names),
+        plot_yields=_plot_yields(body, width, height),
+        great_works=_great_works_by_city(body, names, cities),
     )
 
 

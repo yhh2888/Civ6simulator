@@ -23,7 +23,7 @@ class SimulationApiTests(unittest.TestCase):
         cls.shared = tempfile.TemporaryDirectory()
         shared = Path(cls.shared.name)
         for name in ("catalog.json", "rules_db.json", "game_rules.json", "data_audit_report.json"):
-            shutil.copy(APP_DATA / name, shared / name)
+            shutil.copy((APP_DATA.parent / "config" if name == "game_rules.json" else APP_DATA) / name, shared / name)
 
     @classmethod
     def tearDownClass(cls):

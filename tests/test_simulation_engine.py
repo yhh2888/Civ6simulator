@@ -532,7 +532,7 @@ class RulesConfigTests(unittest.TestCase):
         from app.config import RuleConfigurationError, load_game_rules
         from tests.sim_fixtures import APP_DATA
 
-        rules = json.loads((APP_DATA / "game_rules.json").read_text(encoding="utf-8"))
+        rules = json.loads((APP_DATA.parent / "config" / "game_rules.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "rules.json"
             rules["simulation"] = {"overflow_policy": "same_turn_queue", "population_yields_source": "global_parameters"}

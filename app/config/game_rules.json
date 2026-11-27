@@ -73,5 +73,8 @@
     "default_build_charges": 1,
     "feature_removal_charge_cost": 1,
     "overrides": {}
+  },
+  "simulation": {
+    "fixed_point_percent": true
   }
 }

@@ -143,6 +143,8 @@ def production_bonus(ctx: EngineContext, book: EffectBook, city_id: str, categor
             hit = entity_id == data.get("UnitType")
         elif effect == "EFFECT_ADJUST_DISTRICT_PRODUCTION" and category == "district":
             hit = data.get("DistrictType") in ctx.district_aliases(entity_id)
+        elif effect == "EFFECT_ADJUST_ALL_DISTRICTS_PRODUCTION" and category == "district":
+            hit = True
         elif effect == "EFFECT_ADJUST_BUILDING_PRODUCTION" and category == "building":
             if data.get("BuildingType"):
                 hit = data["BuildingType"] in ctx.building_aliases(entity_id)
