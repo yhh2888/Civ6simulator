@@ -1,12 +1,104 @@
 # Civ VI City Studio
 
-문명 6 도시 하나하나를 턴 단위로 계산해 보는 시뮬레이터입니다. 세이브 파일을 열면 지도, 도시, 시민 배치, 생산 대기열, 기술과 정책, 도시국가 사절, 교역로까지 그대로 가져오고, 다음 몇 턴 동안 도시가 어떻게 자라는지 계산합니다. 숫자가 왜 그렇게 나왔는지는 도시 장부에 한 줄씩 남습니다. 어느 XML 행에서 왔는지, 어떤 정책이 몇 퍼센트를 더했는지까지요.
+현재 버전 / Current version: **0.5.2**
 
-알렉산드리아(90턴, 몰려드는 폭풍) 기준으로 게임 툴팁의 생산력 27을 항목별로 맞춰 놓았습니다. 타일 12, 산업구역 6, 건물 5, 수출 교역로 3, 도시국가 보너스 1.
+> 비공식 팬 도구입니다. Firaxis Games, 2K와 관계가 없습니다. 게임 데이터는 포함하지 않으며, 처음 실행할 때 내 PC에 설치된 게임에서 읽어 옵니다.
+>
+> An unofficial fan tool, not affiliated with Firaxis Games or 2K. It ships no game data; the rules are read from your own installation on first run.
 
-현재 버전: **0.5.2**
+## 개요 / Overview
 
-0.5.1과 비교해 세이브에서 읽는 범위가 넓어졌고, 난이도와 설정 파일이 생겼으며, 게임 화면과 숫자를 맞추는 보정이 크게 늘었습니다. 확인 기준은 직접 플레이한 90턴 마케도니아 세이브와 관전 세이브 31턴(AI 6개 문명, 황제)의 도시 툴팁입니다.
+### 한국어
+
+문명 6 도시 하나하나를 턴 단위로 계산해 보는 시뮬레이터입니다. 세이브 파일을 열면 지도, 도시, 시민 배치, 생산 대기열, 기술과 정책, 총독, 도시국가 사절, 교역로까지 그대로 가져오고, 다음 몇 턴 동안 도시가 어떻게 자라는지 계산합니다. 숫자가 왜 그렇게 나왔는지는 도시 장부에 한 줄씩 남습니다. 어느 XML 행에서 왔는지, 어떤 정책이 몇 퍼센트를 더했는지까지요.
+
+게임 화면과 숫자가 맞는지를 기준으로 다듬어 왔습니다.
+- 직접 플레이한 90턴 마케도니아 세이브: 알렉산드리아 생산력 27(타일 12, 산업구역 6, 건물 5, 수출 교역로 3, 도시국가 보너스 1), 식량 35, 펠라 식량 39·문화 14.9 등이 게임 툴팁과 같습니다.
+- 관전 세이브 31턴(AI 6개 문명, 황제): 음반자 콩고·니다로스·니아니의 6개 산출이 모두 맞고, 7개 도시 42개 값 중 남은 차이는 아래 "버전 기록"에 적었습니다.
+
+### English
+
+A turn-by-turn simulator for individual Civilization VI cities. Opening a save brings in the map, cities, worked tiles, production queues, technologies and policies, governors, city-state envoys and trade routes, then computes how each city develops over the next turns. Every number has a line in the city ledger saying where it came from, down to the XML row or the policy that added a percentage.
+
+It has been tuned against the game's own screens:
+- A turn-90 Macedon save played by hand: Alexandria production 27 (tiles 12, Industrial Zone 6, buildings 5, outgoing trade route 3, city-state bonus 1), food 35, Pella food 39 and culture 14.9 match the in-game tooltips.
+- A turn-31 spectator save (six AI civilizations, Emperor): all six yields of Mbanza Kongo, Nidaros and Niani match; the remaining differences among 42 values in seven cities are listed under Version history.
+
+## 시작하기 / Getting started
+
+### 한국어
+
+1. 압축을 풀고 `run_windows.bat`을 더블클릭합니다. 처음에는 가상환경을 만들고 패키지를 설치하느라 1~2분 걸리고, 그다음부터는 3~4초 안에 브라우저가 열립니다.
+2. 처음 열면 지도 대신 **게임 데이터 준비** 화면이 나옵니다. 둘 중 하나를 고르세요.
+   - **게임 폴더를 바로 지정:** 경로 칸에 문명 6 설치 폴더를 넣고 [추출]을 누릅니다. 예: `C:\Program Files (x86)\Steam\steamapps\common\Sid Meier's Civilization VI`. Steam 기본 위치에 있으면 화면에 미리 나타납니다.
+   - **`collect_game_data.bat` 사용:** 게임 폴더에서 `Base\Assets\Gameplay\Data`와 `DLC`의 규칙 파일(XML, SQL, modinfo)만 골라 프로젝트의 `game_data` 폴더로 복사합니다. 그림과 소리는 복사하지 않습니다. 끝나면 경로 칸에 `game_data` 폴더를 넣고 [추출]을 누릅니다. Data.zip 옆에 DLC 폴더나 DLC zip이 있으면 그것도 찾습니다.
+3. 추출은 몇 초에서 1분 정도 걸립니다. 기본 게임 규칙(`catalog.json`, `rules_db.json`)과, DLC가 있으면 확장팩·DLC 규칙(`rules_db_xp2.json`)이 `app\data`에 만들어지고 화면이 다시 열립니다.
+4. 오른쪽 위 [세이브 가져오기]로 `.Civ6Save` 파일을 엽니다. 세이브는 보통 `문서\My Games\Sid Meier's Civilization VI\Saves`에 있습니다.
+5. 설정은 `app\config`에 있습니다. `game_rules.json`(게임 규칙), `difficulty.json`(난이도 보너스, AI 추가 %), `save_import.json`(가져올 때 쾌적도 효과, 관전 세이브 처리). 고치면 다음 요청부터 반영됩니다.
+
+### English
+
+1. Unzip and double-click `run_windows.bat`. The first run creates a virtual environment and installs packages (a minute or two); after that the browser opens within 3 to 4 seconds.
+2. The first page is **Game data setup**, not the map. Pick one:
+   - **Point at the game folder:** enter your Civilization VI install folder and press Extract, e.g. `C:\Program Files (x86)\Steam\steamapps\common\Sid Meier's Civilization VI`. Default Steam locations are offered automatically.
+   - **Use `collect_game_data.bat`:** it copies only the rule files (XML, SQL, modinfo) of `Base\Assets\Gameplay\Data` and `DLC` into the project's `game_data` folder, no art or audio. Then enter `game_data` and press Extract. A DLC folder or DLC zip next to Data.zip is picked up too.
+3. Extraction takes a few seconds to about a minute. It writes the base rules (`catalog.json`, `rules_db.json`) and, when DLC is present, the expansion and DLC rules (`rules_db_xp2.json`) into `app\data`, then reloads the page.
+4. Open a `.Civ6Save` with Import save (top right). Saves are usually in `Documents\My Games\Sid Meier's Civilization VI\Saves`.
+5. Settings live in `app\config`: `game_rules.json` (gameplay rules), `difficulty.json` (handicap bonuses, AI extra %), `save_import.json` (amenity effects on import, spectator saves). Edits apply from the next request.
+
+Command line, if you prefer:
+
+```powershell
+python tools/build_catalog.py  "<Civ VI>\Base\Assets\Gameplay\Data"
+python tools/build_rules_db.py "<Civ VI>\Base\Assets\Gameplay\Data"
+python tools/build_ruleset_db.py --base "<Civ VI>\Base\Assets\Gameplay\Data" --dlc "<Civ VI>\DLC"
+```
+
+## 무엇을 하나 / What it does
+
+### 한국어
+
+- **세이브 가져오기.** 지형, 강, 자연재해로 늘어난 타일 산출, 도시와 특수지구, 시설·건물 약탈, 시민 배치와 잠금, 현재 생산과 진행도, 연구한 기술과 사회제도, 정부와 정책, 총독, 판테온, 도시국가 사절과 종주국, 교역로(들어오는 것 포함), 세계 의회 결의, 걸작을 읽습니다. 같은 세이브의 다른 문명으로 바꿔서 볼 수 있고, 관전 세이브도 열립니다.
+- **산출 계산.** 지형부터 인접 보너스, 건물, 정책과 특성, 총독, 도시국가 보너스, 교역로, 걸작, 난이도 보너스, 쾌적도까지 게임 데이터의 Modifier와 Requirement를 그대로 해석합니다. % 보정은 게임처럼 1/256 단위로 계산합니다.
+- **난이도.** 문명마다 난이도와 AI/사람을 정하고, 보너스 표를 고쳐 저장할 수 있습니다.
+- **도시 장부.** 모든 줄에 계산식과 출처가 붙고, 장부 합계와 도시 화면 숫자가 맞는지 매번 검산합니다. 교역로마다 따로 장부가 있고, "자원별 장부" 탭에서는 한 가지 산출을 모든 도시에 걸쳐 봅니다.
+- **턴 시뮬레이션.** 성장, 주거공간, 쾌적도, 생산 대기열과 초과분, 연구를 정해진 순서로 처리합니다. 시나리오를 복사해 서로 비교할 수 있습니다.
+- **비교용 내보내기.** 여러 세이브를 한 번에 골라 모든 문명 도시의 산출을 CSV 하나로 받습니다. 턴별로 게임 값과 나란히 놓고 볼 때 씁니다.
+- **지도.** 타일마다 지형, 시설, 산출을 보여 주고, 특수지구에는 인접 보너스와 지어진 건물이 함께 나옵니다.
+
+아직 못 하는 것: 위인 점수, 걸작 테마 보너스, 충성도는 읽거나 계산하지 않습니다. 쾌적도는 사치품 교환·도시국가 사치품 같은 출처를 다 읽지 못해 일부 도시의 상태가 틀릴 수 있습니다. 타일 값이 다르면 타일 수동 보정으로 맞출 수 있고, 빠진 규칙은 화면의 "계산 근거·미지원 규칙" 탭에 모두 기록됩니다.
+
+### English
+
+- **Save import.** Terrain, rivers, tile yields added by natural disasters, cities and districts, pillaged improvements and buildings, worked and locked tiles, current production and progress, researched technologies and civics, government and policies, governors, pantheon, city-state envoys and suzerains, trade routes (incoming ones too), World Congress resolutions and great works. You can switch to any other civilization in the same save; spectator saves open too.
+- **Yield calculation.** From terrain through adjacency, buildings, policies and traits, governors, city-state bonuses, trade routes, great works, handicap bonuses and amenities, the game's Modifiers and Requirements are interpreted as written. Percentages are summed in 1/256 steps as the game does.
+- **Difficulty.** Set a handicap and AI/human for each civilization, and edit and save the bonus table.
+- **City ledger.** Every line carries its formula and source, and the ledger total is checked against the city screen each time. Each trade route has its own ledger, and the per-yield tab shows one yield across all cities.
+- **Turn simulation.** Growth, housing, amenities, production queues with overflow, and research run in a fixed order. Scenarios can be copied and compared.
+- **Export for comparison.** Pick several saves at once and get every civilization's city yields in one CSV, to set beside the in-game values turn by turn.
+- **Map.** Each tile shows terrain, improvement and yields; districts show their adjacency and the buildings built.
+
+Not yet covered: great person points, great work theming bonuses and loyalty are neither read nor computed. Amenities miss some sources (traded luxuries, city-state luxuries), so a few cities can get the wrong mood. Tiles that differ can be corrected by hand, and every missing rule is listed in the "calculation basis / unsupported rules" tab.
+
+## 버전 기록 / Version history
+
+### 0.1 ~ 0.4
+
+0.3까지는 지도 위에 도시를 놓고 시민을 손으로 배치하는 편집기였습니다. 산출은 지형과 건물의 기본값 정도만 더했고, 정책이나 정부는 저장만 할 뿐 계산에 들어가지 않았습니다.
+
+0.4에서 계산 엔진을 새로 만들었습니다. 게임의 Modifier, Requirement, 성장 공식, 생산 대기열을 해석하고, 시민 배치 최적화와 시나리오 비교, 검산되는 도시 장부가 들어갔습니다. 0.4 후반에는 세이브 파일 해독에 집중했습니다. 지도와 도시에서 시작해 시민 배치, 생산, 기술과 정책, 사절, 판테온, 교역로 순으로 읽을 수 있는 범위를 넓혔고, 확장팩과 DLC 규칙을 게임이 불러오는 순서 그대로 합치는 빌더를 만들었습니다. 이 시기 번호는 작업 한 번마다 하나씩 올렸습니다.
+
+Up to 0.3 this was an editor: place cities on a map and assign citizens by hand. Yields were little more than terrain and building base values; policies and governments were stored but not computed. 0.4 brought a new engine that interprets the game's Modifiers, Requirements, growth formula and production queue, with citizen optimisation, scenario comparison and a self-checking city ledger. Late 0.4 was about decoding saves, step by step from the map and cities to citizens, production, technologies and policies, envoys, pantheons and trade routes, plus a builder that merges expansion and DLC rules in the game's own load order. Version numbers went up with every piece of work.
+
+### 0.5
+
+0.5부터 버전을 정리해서 붙입니다. 기능 묶음이 바뀌면 둘째 자리, 보정과 수정은 셋째 자리를 올립니다. 그리고 게임 데이터를 다시 배포하던 문제를 고쳤습니다. 0.4까지는 게임 XML에서 만든 규칙 파일(`catalog.json`, `rules_db.json`, `rules_db_xp2.json`)을 저장소와 배포 파일에 그대로 넣었습니다. 0.5부터는 이 파일들을 빼고, 사용자의 설치본에서 처음 실행할 때 만듭니다.
+
+From 0.5, the second digit marks a new set of features and the third digit fixes and corrections. 0.5 also stopped redistributing game data: the rule files built from the game's XML are no longer in the repository or the release, and are built from your installation on first run.
+
+**0.5.2**
+
+0.5.1과 비교해 세이브에서 읽는 범위가 넓어졌고, 난이도와 설정 파일이 생겼으며, 게임 화면과 숫자를 맞추는 보정이 크게 늘었습니다.
 
 - 세이브에서 새로 읽는 것
   - 자연재해(범람, 화산 토양, 폭풍·눈보라·모래폭풍)로 늘어난 타일 산출. 장부에 "자연재해로 늘어난 산출"로 나옵니다(알렉산드리아 식량 35, 펠라 식량 39).
@@ -21,18 +113,27 @@
   - AI 추가 %(과학·생산력·금 +6)를 `ai_extra_percent`로 둡니다. 게임 데이터에는 없지만 관전 세이브의 황제 AI 도시들과 맞는 값입니다.
 - 계산 보정
   - % 보정을 게임처럼 하나씩 1/256 단위로 반올림해 더합니다(24% → 61/256). 인구당 과학·문화도 같은 방식입니다(문화 30% → 77/256, 0.5.1의 "정확히 0.3"을 바꿈). `simulation.fixed_point_percent`로 끌 수 있습니다.
-  - 가져온 도시에 쾌적도 효과(불만 −10%, 행복 +10% 등)를 적용합니다(`app/config/save_import.json`의 `apply_amenity_effects`). 베이징·콘스탄티노플의 불만 상태가 게임과 맞습니다. 다만 사치품 교환 같은 쾌적도 출처를 다 읽지 못해 일부 도시(코바 등)는 상태가 틀릴 수 있습니다.
+  - 가져온 도시에 쾌적도 효과(불만 −10%, 행복 +10% 등)를 적용합니다(`app/config/save_import.json`의 `apply_amenity_effects`). 베이징·콘스탄티노플의 불만 상태가 게임과 맞습니다. 다만 쾌적도 출처를 다 읽지 못해 일부 도시(코바 등)는 상태가 틀릴 수 있습니다.
   - 걸작 종류별 산출 효과(콩고 은키시: 유물·유적·조각상마다 식량 +2, 생산력 +2, 금 +4, 신앙 +1).
   - 시설 인접 규칙, 특수지구 인접 보너스를 다른 산출로 옮기는 효과(테오도라: 성지 인접 농장 +1 신앙, 성지 신앙 인접만큼 문화), 도심에 붙는 인접 규칙(말리: 인접 사막·사막 언덕마다 식량·신앙 +1), 수도까지 거리 조건(육천: 수도 6타일 이내 모든 산출 +10%, 7타일 이상 −15%).
   - 종주국 판정에서 도시국가 자신의 기록을 빼고(오클랜드), 시대 조건(REQUIREMENT_PLAYER_ERA_AT_LEAST)을 계산합니다(산업 시대 해안 타일 생산력 +2).
 - 설정 파일
-  - `app/config/`에 사용자가 고칠 설정을 모았습니다. `game_rules.json`(app/data에서 이동, data 폴더에 사본이 있으면 그쪽 우선), `difficulty.json`, `save_import.json`(쾌적도 효과, 관전 세이브 전원 AI). JSON을 직접 고쳐도 다음 요청부터 반영됩니다.
+  - `app/config/`에 사용자가 고칠 설정을 모았습니다. `game_rules.json`(app/data에서 이동, data 폴더에 사본이 있으면 그쪽 우선), `difficulty.json`, `save_import.json`. JSON을 직접 고쳐도 다음 요청부터 반영됩니다.
 - 화면과 도구
-  - "산출 CSV 내보내기": 세이브 여러 개를 골라, 도시국가를 뺀 모든 문명의 도시 산출(게임처럼 0.1 단위 내림, 보정 전 값, % 합계, 쾌적도 상태)을 CSV 하나로 받습니다. 턴별로 게임 값과 비교할 때 씁니다.
+  - "산출 CSV 내보내기": 세이브 여러 개를 골라, 도시국가를 뺀 모든 문명의 도시 산출(게임처럼 0.1 단위 내림, 보정 전 값, % 합계, 쾌적도 상태)을 CSV 하나로 받습니다.
   - 하단 "자원별 장부" 탭: 한 가지 산출을 모든 도시에 걸쳐 항목별로 보고, 도시를 펼치면 계산식이 나옵니다.
   - 타일 수동 보정(장부에 "수동 보정"으로 표시), 지도 "타일 상세" 모드의 시설 이름 표시.
   - 데이터 추출이 Data.zip 옆의 DLC 폴더나 DLC zip도 찾습니다. 세이브를 불러오거나 문명을 바꾸면 정책·총독 화면을 새 규칙으로 다시 읽습니다(전에는 "총독 미지원"이 뜰 수 있었음).
 - 알려진 차이(관전 세이브 31턴): 콘스탄티노플 식량(+3), 베이징 문화(+2), 나란호 금(국제 교역로 금이 게임에는 없음)은 아직 원인을 모릅니다.
+
+Compared with 0.5.1, more of the save is read, difficulty and settings files arrived, and many corrections bring the numbers in line with the game.
+
+- Newly read from saves: tile yields added by natural disasters; pillaged improvements and buildings (shown as "(pillaged)" on the map); great works in city buildings; governors' city, promotions and establishment, AI governors included; incoming trade routes and World Congress resolutions; a missing leader is filled in when the civilization has only one.
+- Difficulty: a per-civilization handicap and AI/human dialog with the game's HIGH_DIFFICULTY_*_SCALING bonuses (save owner human, spectator saves all AI); an editable bonus table saved to `app/config/difficulty.json`; an AI extra % (science, production, gold +6) that is not in the game data but fits the Emperor AI cities of a spectator save.
+- Calculation: percentages and per-citizen science/culture summed as individually rounded 1/256 fractions (`simulation.fixed_point_percent`); amenity effects on imported cities (`apply_amenity_effects`), right for Beijing and Constantinople but not yet for every city; per-object great work yields (Kongo's Nkisi); improvement adjacency and adjacency-mirroring effects (Theodora), city-centre adjacency rules (Mali), distance-to-capital requirements (Lady Six Sky); suzerain fix (Auckland) and era requirements.
+- Settings: `app/config/` now holds `game_rules.json`, `difficulty.json` and `save_import.json`.
+- Screens and tools: CSV export of every civilization's city yields from several saves; per-yield ledger tab; manual tile corrections; improvement names on the map; DLC folder/zip detection, and the policy and governor panels reload after an import.
+- Known differences (turn-31 spectator save): Constantinople food (+3), Beijing culture (+2) and Naranjo gold (the international route's gold is not in the game's number) are not explained yet.
 
 **0.5.1**
 
@@ -44,6 +145,54 @@
 - 인구당 문화를 정확히 0.3으로 계산하고, 화면의 산출은 게임처럼 소수 첫째 자리에서 버립니다.
 - 걸작을 도시에 넣으면 산출에 더합니다.
 - 지도 "타일 상세" 모드, 불러오기 진행 막대, 다른 문명 보기.
+
+First-run setup screen and `collect_game_data.bat` (the extracted data was checked table by table against the previous release); `tools/build_catalog.py`; `run_windows.bat` installs packages only once and opens the browser 3 seconds after the server starts; city-state "+N when building" bonuses counted in city production; trade route records split by the player they belong to; per-citizen culture as exactly 0.3 and on-screen yields truncated to one decimal like the game; great works added to yields; tile detail map mode, import progress bar, viewing other civilizations.
+
+## 앞으로의 방향 / Roadmap
+
+### 한국어
+
+지금까지는 "게임 화면과 같은 숫자"를 기준으로 계산 엔진을 맞춰 왔습니다. 두 세이브(직접 플레이, 관전)에서 대부분 맞게 된 것은 규칙 해석 방식이 맞다는 근거입니다. 다만 표본이 두 게임, 두 시점뿐이라 다른 문명·난이도·시대에서는 아직 검증되지 않았습니다. 앞으로는 정확도를 넓게 확인하는 일과, 맞춘 계산을 실제 판단에 쓰게 하는 일을 함께 진행하려 합니다.
+
+1. **남은 차이 해결 (0.5.x)**
+   - 쾌적도 출처를 세이브에서 읽기: 사치품 교환(외교 거래), 도시국가 사치품, 종교·불가사의·위인. 다 읽기 전까지는 도시별로 쾌적도 상태를 직접 지정하는 칸을 둡니다.
+   - 콘스탄티노플 식량 +3, 베이징 문화 +2, 국제 교역로 금이 게임 수치에 안 들어가는 이유.
+   - AI 추가 %가 어디서 오는지, 난이도마다 같은지 확인. 지금은 황제 한 단계에서 관찰한 값입니다.
+2. **검증 자동화 (0.6)**
+   - CSV 내보내기에 "게임 값" 열을 두고, 채워 넣으면 차이와 그 차이가 어느 항목에서 생겼을지 후보를 자동으로 정리합니다.
+   - 연속된 턴 세이브로 턴 시뮬레이션을 검증: n턴 세이브에서 예측한 성장·생산 완료·연구 진행을 n+1턴 세이브의 실제 값과 비교합니다. 산출뿐 아니라 시뮬레이션 자체의 정확도를 숫자로 볼 수 있게 됩니다.
+   - 확인된 도시 값을 회귀 테스트로 쌓아, 규칙을 고칠 때 이미 맞던 값이 깨지지 않게 합니다.
+3. **세이브 해독 넓히기**
+   - 위인 점수, 충성도, 걸작 테마, 외교 거래와 교역 대상, 시대 점수와 황금기·암흑기 효과.
+4. **계획 도구 (0.7 이후)**
+   - 특수지구 위치 후보 비교(인접 보너스와 이후 턴의 누적 산출), 생산 순서 비교, 시민 배치 목표(성장 우선, 생산 우선 등)별 결과 비교.
+   - 제국 전체 단위의 연구·사회제도 경로 시뮬레이션.
+5. **유지와 배포**
+   - 게임 패치나 새 DLC가 나오면 규칙을 다시 추출하는 것만으로 따라가게 하고, 설정 파일(`app/config`)을 화면에서 고칠 수 있게 합니다.
+
+현실적인 한계도 있습니다. 세이브 형식은 공개된 명세가 없어 한 항목씩 실제 세이브로 확인하며 풀고 있고, 게임 데이터에 없는 값(AI 추가 %처럼)은 관찰로만 맞출 수 있습니다. 그래도 지금 구조(모든 숫자에 출처가 붙는 장부, 턴별 CSV 비교)는 틀린 곳을 빠르게 찾아내는 데 유리해서, 검증 표본이 늘수록 정확도를 꾸준히 올릴 수 있습니다.
+
+### English
+
+So far the engine has been tuned to one standard: the same numbers as the game's screens. Matching most values in two saves (one played by hand, one spectated) is evidence that the rules are interpreted the right way, but two games at two points in time are a small sample, and other civilizations, difficulties and eras are still unchecked. Next comes checking accuracy more widely, and putting the matched calculation to use for real decisions.
+
+1. **Close the remaining gaps (0.5.x)**
+   - Read amenity sources from the save: traded luxuries (diplomatic deals), city-state luxuries, religion, wonders, great people. Until then, a per-city field to set the amenity state by hand.
+   - Constantinople food +3, Beijing culture +2, and why international trade route gold is not in the game's number.
+   - Where the AI extra % comes from and whether it changes with difficulty; today it is a value observed at Emperor only.
+2. **Automated checking (0.6)**
+   - A "game value" column in the CSV export; when filled in, the differences and the likely items behind them are listed automatically.
+   - Validate the turn simulation with consecutive saves: growth, completed production and research predicted from turn n compared with the actual turn n+1 save, giving a number for the simulation's own accuracy, not only the yields'.
+   - Confirmed city values kept as regression tests, so a rule fix cannot quietly break values that already matched.
+3. **Read more of the save**
+   - Great person points, loyalty, great work theming, diplomatic deals and trade partners, era score and golden/dark age effects.
+4. **Planning tools (0.7 and later)**
+   - Compare district sites (adjacency and the yields they add up to over later turns), production orders, and citizen focus goals (growth first, production first and so on).
+   - Empire-wide technology and civic path simulation.
+5. **Maintenance and distribution**
+   - Follow game patches and new DLC by re-extracting the rules, and edit the `app/config` settings from the UI.
+
+There are real limits. The save format has no public specification, so it is worked out one field at a time against real saves, and values that are not in the game data (like the AI extra %) can only be fitted from observation. Still, the current structure, with a source on every number and turn-by-turn CSV comparison, makes wrong values quick to find, so accuracy can keep rising as more saves are checked.
 
 ## 상세 문서
 
