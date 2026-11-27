@@ -38,6 +38,8 @@ python tools/build_ruleset_db.py --base "<Civ VI>\Base\Assets\Gameplay\Data" --d
 
 ## 무엇을 하나
 
+### 한국어
+
 - **세이브 가져오기.** 지형, 강, 도시와 특수지구, 시민 배치와 잠금, 현재 생산과 진행도, 연구한 기술과 사회제도, 정부와 정책, 판테온, 도시국가 사절과 종주국, 상인의 교역로를 읽습니다. 같은 세이브의 다른 문명으로 바꿔서 볼 수도 있습니다.
 - **산출 계산.** 지형부터 인접 보너스, 건물, 정책과 특성, 도시국가 보너스, 교역로, 걸작까지 게임 데이터의 Modifier와 Requirement를 그대로 해석합니다.
 - **도시 장부.** 모든 줄에 계산식과 출처가 붙고, 장부 합계와 도시 화면 숫자가 맞는지 매번 검산합니다. 교역로는 교역로마다 따로 장부가 있습니다.
@@ -45,6 +47,16 @@ python tools/build_ruleset_db.py --base "<Civ VI>\Base\Assets\Gameplay\Data" --d
 - **지도.** 타일마다 지형, 시설, 산출을 바로 보여 주고, 특수지구에는 인접 보너스와 지어진 건물이 함께 나옵니다.
 
 아직 못 하는 것도 있습니다. 총독, 위인 점수, 강 범람으로 늘어난 타일 산출, 걸작이 걸린 위치, 충성도는 세이브에서 읽지 못하거나 계산하지 않습니다. 화면의 "계산 근거·미지원 규칙" 탭에 빠진 규칙이 전부 기록됩니다.
+
+### English
+
+- **Import Save.** Reads terrain, rivers, cities and districts, citizen assignments and locks, current production and progress, researched technologies and civics, government and policies, pantheon, city-state envoys and suzerainty, and trader trade routes. You can also switch to another civilization in the same save to view its data.
+- **Yield Calculation.** Interprets the game's Modifiers and Requirements directly from game data, including terrain, adjacency bonuses, buildings, policies, traits, city-state bonuses, trade routes, and Great Works.
+- **City Ledger.** Every line includes a calculation formula and its source, and the ledger totals are cross-checked against the yields shown in the city UI every time. Trade routes each have their own separate ledger.
+- **Turn Simulation.** Processes growth, housing, amenities, production queues and overflow, and research in a fixed order. Scenarios can be duplicated and compared against one another.
+- **Map.** Displays terrain, improvements, and yields directly on each tile. Districts show both adjacency bonuses and constructed buildings.
+
+There are still some limitations. Governors, Great Person points, tile yields increased by river flooding, Great Work locations, and loyalty are either not read from the save or not calculated. All unsupported rules are documented in the "Calculation Details & Unsupported Rules" tab.
 
 ## 버전 기록 / Version history
 
