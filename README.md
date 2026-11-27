@@ -46,7 +46,7 @@ python tools/build_ruleset_db.py --base "<Civ VI>\Base\Assets\Gameplay\Data" --d
 
 아직 못 하는 것도 있습니다. 총독, 위인 점수, 강 범람으로 늘어난 타일 산출, 걸작이 걸린 위치, 충성도는 세이브에서 읽지 못하거나 계산하지 않습니다. 화면의 "계산 근거·미지원 규칙" 탭에 빠진 규칙이 전부 기록됩니다.
 
-## 버전 기록
+## 버전 기록 / Version history
 
 ### 0.1 ~ 0.4
 
@@ -70,3 +70,47 @@ python tools/build_ruleset_db.py --base "<Civ VI>\Base\Assets\Gameplay\Data" --d
 - 인구당 문화를 정확히 0.3으로 계산하고, 화면의 산출은 게임처럼 소수 첫째 자리에서 버립니다.
 - 걸작을 도시에 넣으면 산출에 더합니다.
 - 지도 "타일 상세" 모드, 불러오기 진행 막대, 다른 문명 보기.
+
+### English
+
+**0.1 to 0.4.** Up to 0.3 this was an editor: you placed cities on a map and assigned citizens by hand. Yields came from base terrain and building values only; policies and governments were stored but never counted.
+
+0.4 brought a new calculation engine. It reads the game's Modifiers and Requirements, growth formulas and production queues, and adds citizen optimisation, scenario comparison and a city ledger that checks itself against the totals. The later 0.4 releases went into save files: first the map and cities, then citizens, production, technologies and policies, envoys, the pantheon and trade routes. A builder now merges expansion and DLC rules in the same order the game loads them. Version numbers in this period went up with every piece of work.
+
+**0.5.** Versions now follow one rule: a new feature set raises the second number, fixes raise the third.
+
+0.5 also stops redistributing game data. Until 0.4 the rule files generated from the game's XML (`catalog.json`, `rules_db.json`, `rules_db_xp2.json`) were committed and shipped. From 0.5 they are left out and built on first run from your own installation.
+
+**0.5.1**
+
+- First-run setup screen and `collect_game_data.bat`. Point it at the game folder or at the copied folder, press Extract, and you get the same data the old packages carried (checked table by table).
+- `tools/build_catalog.py`, which rebuilds the former `catalog.json` exactly.
+- `run_windows.bat` installs packages only once and opens the browser three seconds after the server starts.
+- City-state bonuses such as "+N while building buildings or districts" now count towards city production, so the number matches the in-game tooltip.
+- Trade route records are assigned to the player whose data block holds them; a city-state trader's record no longer shows up as your route.
+- Culture per citizen is exactly 0.3, and yields on screen are cut down to one decimal the way the game shows them.
+- Great works placed in a city add their yields.
+- Tile detail map mode, a loading bar and a switch to view other civilizations.
+
+## 0.6까지의 방향 / Road to 0.6
+
+아래는 지금 보이는 빈틈을 기준으로 한 예상입니다. 세이브 형식을 얼마나 더 풀 수 있느냐에 따라 순서와 범위는 바뀔 수 있습니다.
+
+- **세이브에서 더 읽기 (0.5.x).** 강 범람으로 늘어난 타일 산출, 걸작이 걸린 건물, 지금 연구 중인 기술과 사회제도, 창시한 종교의 신앙. 범람 보너스는 알렉산드리아 식량이 게임보다 3 적게 나오는 원인으로 보고 있습니다. 범람 전후 세이브가 있으면 찾기 쉬워집니다.
+- **총독과 위인 (0.5.x ~ 0.6).** 총독 배치와 진급, 위인 점수와 후보 비용. 위인 점수가 들어가야 초과분이 신앙으로 바뀌는 규칙과 볼로냐 같은 종주국 보너스를 계산할 수 있습니다.
+- **쾌적도와 충성도.** 교역으로 받은 사치품, 주둔 유닛, 종교에서 오는 쾌적도를 읽어 지금 꺼 둔 쾌적도 효과를 기본으로 켜는 것이 목표입니다. 충성도는 압력 계산까지 가야 해서 0.6 이후가 될 수 있습니다.
+- **여러 문명 동시 보기 (0.6).** 지금은 한 번에 한 문명만 계산합니다. 0.6에서는 세이브 안의 모든 문명을 한꺼번에 계산해 비교하는 화면을 생각하고 있습니다.
+- **게임 속도.** 성장 비용은 표준 속도만 검증되어 있습니다. 온라인, 빠름, 서사시, 마라톤 속도의 성장식을 실제 세이브로 맞춥니다.
+- **문서.** 기술 문서를 `docs/`로 옮기고, 게임 화면과 대조한 사례를 모아 둡니다.
+
+### English
+
+These are expectations based on the gaps we can see today. Order and scope depend on how much more of the save format can be read.
+
+- **Reading more from saves (0.5.x).** Tile yields gained from river floods, which building holds each great work, the technology and civic currently being researched, and the beliefs of a founded religion. Floods are the likely reason Alexandria shows 3 less food than the game; a save from before and after a flood would make them easy to find.
+- **Governors and great people (0.5.x to 0.6).** Governor placement and promotions, great person points and candidate costs. Great person points are needed for the rule that turns the overflow into faith, and for suzerain bonuses such as Bologna's.
+- **Amenities and loyalty.** Read amenities from traded luxuries, garrisons and religion so the amenity effect, switched off for imported games today, can be on by default. Loyalty needs pressure calculations and may land after 0.6.
+- **All civilizations at once (0.6).** Today one civilization is calculated at a time. 0.6 is meant to calculate every civilization in a save together and compare them side by side.
+- **Game speeds.** Growth costs are verified for Standard speed only. Online, Quick, Epic and Marathon growth will be matched against real saves.
+- **Documentation.** Move the technical docs to `docs/` and collect cases checked against the game's own screens.
+
